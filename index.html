@@ -133,6 +133,15 @@
         <h2>Data</h2>
 
         <div class="field">
+          <label>Resolutie</label>
+          <div class="toggle-row">
+            <div class="toggle-btn active" data-val="uur" id="resUur">Uur</div>
+            <div class="toggle-btn" data-val="kwartier" id="resKwartier">Kwartier</div>
+          </div>
+          <div class="hint">Kwartier vereist kwartierwaarden in je meter-CSV. Als je prijzen-CSV alleen uurprijzen bevat, wordt die prijs automatisch voor alle 4 kwartieren in dat uur gebruikt.</div>
+        </div>
+
+        <div class="field">
           <label>Prijzen leverancier <span class="val" id="levVal"></span></label>
           <select id="leverancierSelect">
             <option value="">— kies leverancier —</option>
@@ -252,6 +261,9 @@ let meterRows = null;   // [{hourKey, importKwh, exportKwh}]
 let priceRows = null;   // Map hourKey -> price
 let saldMode = 1;       // 1 = met salderen, 0 = zonder
 let stratMode = 'smart';
+let resMode = 'uur';    // 'uur' of 'kwartier'
+let meterRawText = null, meterRawName = null;
+let priceRawText = null, priceRawName = null;
 
 // ---------------------------------------------------------------
 // CSV PARSING (klein & afhankelijkheidsvrij)
@@ -270,10 +282,26 @@ function parseCSV(text){
   return rows;
 }
 
-function hourKeyFromMeterTime(t){ return t.slice(0,13); } // "2025-07-01 00"
-function hourKeyFromPriceDatum(d){ return d.slice(0,10) + ' ' + d.slice(11,13); }
+function bucketKeyFromMeterTime(t, res){
+  // t is "YYYY-MM-DD HH:MM"
+  return res === 'kwartier' ? t.slice(0,16) : t.slice(0,13);
+}
+function bucketKeyFromPriceDatum(d, res){
+  // d is ISO-achtig "YYYY-MM-DDTHH:MM:SS+TZ"
+  const datum = d.slice(0,10), uur = d.slice(11,13), min = d.slice(14,16);
+  return res === 'kwartier' ? (datum + ' ' + uur + ':' + min) : (datum + ' ' + uur);
+}
+function lookupPrice(priceMap, key, res){
+  if(priceMap.has(key)) return priceMap.get(key);
+  if(res === 'kwartier'){
+    // val terug op de uurprijs als er geen aparte kwartierprijs is voor dit kwartier
+    const fallback = key.slice(0,-2) + '00';
+    if(priceMap.has(fallback)) return priceMap.get(fallback);
+  }
+  return undefined;
+}
 
-function loadMeterCSV(text){
+function loadMeterCSV(text, res){
   const raw = parseCSV(text);
   if(raw.length === 0) throw new Error('leeg bestand of geen datarijen gevonden');
   const kolommen = Object.keys(raw[0]);
@@ -283,8 +311,8 @@ function loadMeterCSV(text){
     throw new Error('dit lijkt geen meter-CSV te zijn (verwachte kolommen ontbreken: ' + mist.join(', ') + '). Is dit misschien een prijzen-CSV? Upload die dan via de "Prijzen-CSV" knop.');
   }
   raw.sort((a,b)=> a.time < b.time ? -1 : 1);
-  // cumulatieve kolommen -> verschil per interval -> optellen per uur
-  const hourly = new Map();
+  // cumulatieve kolommen -> verschil per interval -> optellen per bucket (uur of kwartier)
+  const buckets = new Map();
   let prevImp = null, prevExp = null;
   for(const r of raw){
     const imp = parseFloat(r['Import T1 kWh']) + parseFloat(r['Import T2 kWh']);
@@ -292,33 +320,38 @@ function loadMeterCSV(text){
     if(prevImp !== null){
       const di = Math.max(0, imp - prevImp);
       const de = Math.max(0, exp - prevExp);
-      const key = hourKeyFromMeterTime(r.time);
-      if(!hourly.has(key)) hourly.set(key, {importKwh:0, exportKwh:0});
-      const h = hourly.get(key);
-      h.importKwh += di; h.exportKwh += de;
+      const key = bucketKeyFromMeterTime(r.time, res);
+      if(!buckets.has(key)) buckets.set(key, {importKwh:0, exportKwh:0});
+      const b = buckets.get(key);
+      b.importKwh += di; b.exportKwh += de;
     }
     prevImp = imp; prevExp = exp;
   }
   const out = [];
-  for(const [key, v] of hourly) out.push({hourKey:key, importKwh:v.importKwh, exportKwh:v.exportKwh});
+  for(const [key, v] of buckets) out.push({hourKey:key, importKwh:v.importKwh, exportKwh:v.exportKwh});
   out.sort((a,b)=> a.hourKey < b.hourKey ? -1 : 1);
   return out;
 }
 
-function loadPriceCSV(text){
+function loadPriceCSV(text, res){
   const raw = parseCSV(text);
   if(raw.length === 0) throw new Error('leeg bestand of geen datarijen gevonden');
   const kolommen = Object.keys(raw[0]);
   if(kolommen.length < 2){
     throw new Error('dit lijkt geen prijzen-CSV te zijn (verwacht kolommen: datum, prijs). Is dit misschien een meter-CSV? Zet die dan in data/leveranciers/.');
   }
-  const map = new Map();
   const priceCol = kolommen.includes('prijs') ? 'prijs' : kolommen[1];
   const dateCol = kolommen.includes('datum') ? 'datum' : kolommen[0];
+  const sums = new Map(); // key -> {sum, n}  (middelt als er meerdere waarden per bucket zijn)
   for(const r of raw){
-    const key = hourKeyFromPriceDatum(r[dateCol]);
-    map.set(key, parseFloat(r[priceCol]));
+    const val = parseFloat(r[priceCol]);
+    if(Number.isNaN(val)) continue;
+    const key = bucketKeyFromPriceDatum(r[dateCol], res);
+    if(!sums.has(key)) sums.set(key, {sum:0, n:0});
+    const s = sums.get(key); s.sum += val; s.n++;
   }
+  const map = new Map();
+  for(const [k,s] of sums) map.set(k, s.sum/s.n);
   return map;
 }
 
@@ -329,10 +362,11 @@ document.getElementById('fileMeter').addEventListener('change', e=>{
   const f = e.target.files[0]; if(!f) return;
   const reader = new FileReader();
   reader.onload = ()=>{
+    meterRawText = reader.result; meterRawName = f.name;
     try{
-      meterRows = loadMeterCSV(reader.result);
+      meterRows = loadMeterCSV(meterRawText, resMode);
       document.getElementById('uploadMeter').classList.add('ok');
-      document.getElementById('uploadMeterText').innerHTML = f.name + '<br><span class="hint">' + meterRows.length + ' uren geladen</span>';
+      document.getElementById('uploadMeterText').innerHTML = f.name + '<br><span class="hint">' + meterRows.length + ' ' + (resMode==='kwartier'?'kwartieren':'uren') + ' geladen</span>';
       recompute();
     }catch(err){ setStatus('Fout bij lezen meter-CSV: '+err.message, true); }
   };
@@ -343,10 +377,12 @@ document.getElementById('filePrice').addEventListener('change', e=>{
   const f = e.target.files[0]; if(!f) return;
   const reader = new FileReader();
   reader.onload = ()=>{
+    priceRawText = reader.result; priceRawName = f.name;
     try{
-      priceRows = loadPriceCSV(reader.result);
+      priceRows = loadPriceCSV(priceRawText, resMode);
       document.getElementById('uploadPrice').classList.add('ok');
-      document.getElementById('uploadPriceText').innerHTML = f.name + '<br><span class="hint">' + priceRows.size + ' uurprijzen geladen</span>';
+      document.getElementById('uploadPriceText').innerHTML = f.name + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
+      document.getElementById('levVal').textContent = '';
       recompute();
     }catch(err){ setStatus('Fout bij lezen prijzen-CSV: '+err.message, true); }
   };
@@ -398,9 +434,10 @@ async function loadLeverancierPrijzenCSV(url, naam){
   try{
     const r = await fetch(url);
     if(!r.ok) throw new Error('bestand niet gevonden');
-    priceRows = loadPriceCSV(await r.text());
+    priceRawText = await r.text(); priceRawName = naam;
+    priceRows = loadPriceCSV(priceRawText, resMode);
     document.getElementById('uploadPrice').classList.add('ok');
-    document.getElementById('uploadPriceText').innerHTML = naam + '<br><span class="hint">' + priceRows.size + ' uurprijzen geladen</span>';
+    document.getElementById('uploadPriceText').innerHTML = naam + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
     document.getElementById('levVal').textContent = naam;
     recompute();
   }catch(e){
@@ -423,9 +460,9 @@ async function tryAutoload(){
 // ---------------------------------------------------------------
 // SIMULATIE
 // ---------------------------------------------------------------
-function simulate(data, capacity, chargeKw, dischargeKw, rte, exportFactor, strategy, marginPct){
+function simulate(data, capacity, chargeKw, dischargeKw, rte, exportFactor, strategy, marginPct, stepHours){
   const eff = Math.sqrt(rte/100);
-  const maxC = chargeKw, maxD = dischargeKw; // kWh per uur (1h stap)
+  const maxC = chargeKw * stepHours, maxD = dischargeKw * stepHours; // kWh per stap
   let soc = 0;
   let costPool = 0; // som van (euro's betaald, in termen van gemiste exportvergoeding) voor opgeslagen energie
 
@@ -494,21 +531,23 @@ function recompute(){
   const expf = parseFloat(document.getElementById('expf').value);
   const reservePct = parseFloat(document.getElementById('reserve').value);
 
-  // koppel meter + prijs per uur
+  // koppel meter + prijs per bucket (uur of kwartier)
   const data = [];
   let missing = 0;
   for(const m of meterRows){
-    const p = priceRows.get(m.hourKey);
+    const p = lookupPrice(priceRows, m.hourKey, resMode);
     if(p === undefined){ missing++; continue; }
     data.push({hourKey:m.hourKey, importKwh:m.importKwh, exportKwh:m.exportKwh,
                 importPrice:p, exportPrice:p*(expf/100), month:m.hourKey.slice(0,7)});
   }
 
-  if(data.length === 0){ setStatus('Geen overlappende uren gevonden tussen meter- en prijzendata.', true); return; }
-  setStatus(data.length + ' uren gekoppeld' + (missing? ' (' + missing + ' zonder prijsmatch overgeslagen)':'') + '.');
+  const eenheid = resMode === 'kwartier' ? 'kwartieren' : 'uren';
+  if(data.length === 0){ setStatus('Geen overlappende ' + eenheid + ' gevonden tussen meter- en prijzendata.', true); return; }
+  setStatus(data.length + ' ' + eenheid + ' gekoppeld' + (missing? ' (' + missing + ' zonder prijsmatch overgeslagen)':'') + '.');
 
   const base = data; // ongewijzigd = 0 batterij
-  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, expf, stratMode, reservePct);
+  const stepHours = resMode === 'kwartier' ? 0.25 : 1;
+  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, expf, stratMode, reservePct, stepHours);
 
   const scenarios = {
     'Zonder salderen': [kostenZonderSalderen(base), kostenZonderSalderen(sim)],
@@ -595,6 +634,28 @@ document.getElementById('stratSmart').addEventListener('click', ()=>{
   stratMode='smart'; document.getElementById('stratSmart').classList.add('active'); document.getElementById('stratNaive').classList.remove('active');
   document.getElementById('reserveField').style.opacity='1'; recompute();
 });
+
+function setResolutie(nieuw){
+  resMode = nieuw;
+  document.getElementById('resUur').classList.toggle('active', nieuw==='uur');
+  document.getElementById('resKwartier').classList.toggle('active', nieuw==='kwartier');
+  // bestaande data opnieuw inlezen op de nieuwe resolutie
+  if(meterRawText){
+    try{
+      meterRows = loadMeterCSV(meterRawText, resMode);
+      document.getElementById('uploadMeterText').innerHTML = meterRawName + '<br><span class="hint">' + meterRows.length + ' ' + (resMode==='kwartier'?'kwartieren':'uren') + ' geladen</span>';
+    }catch(err){ setStatus('Fout bij herladen meter-CSV: '+err.message, true); }
+  }
+  if(priceRawText){
+    try{
+      priceRows = loadPriceCSV(priceRawText, resMode);
+      document.getElementById('uploadPriceText').innerHTML = (priceRawName||'') + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
+    }catch(err){ setStatus('Fout bij herladen prijzen-CSV: '+err.message, true); }
+  }
+  recompute();
+}
+document.getElementById('resUur').addEventListener('click', ()=> setResolutie('uur'));
+document.getElementById('resKwartier').addEventListener('click', ()=> setResolutie('kwartier'));
 
 tryAutoload();
 </script>
