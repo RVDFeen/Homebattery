@@ -1,29 +1,27 @@
-# Leveranciers-map
+# Batterij-besparing calculator
 
-Zet hier per leverancier één meter-CSV neer (kwartierwaarden, cumulatief),
-met kolommen:
+Statische, client-side calculator (geen server nodig). Alles draait in de
+browser van de bezoeker.
 
-```
-time,Import T1 kWh,Import T2 kWh,Export T1 kWh,Export T2 kWh
-```
+## Op GitHub Pages zetten
 
-## Nieuwe leverancier toevoegen
+1. Zet deze hele map (met `index.html` en de map `data/`) in je repo
+   `RVDFeen/Homebattery`.
+2. Ga naar **Settings → Pages**.
+3. Kies bij **Source**: "Deploy from a branch", branch `main`, map `/ (root)`.
+4. Na een minuut is de site live op `https://rvdfeen.github.io/homebattery/`.
 
-1. Zet het CSV-bestand in deze map, bv. `vattenfall.csv`.
-2. Voeg een regel toe aan `index.json`:
+Geen build-stap, geen Actions-workflow nodig — het is puur statische HTML/CSS/JS.
 
-```json
-[
-  { "naam": "Voorbeeld leverancier", "bestand": "voorbeeld.csv" },
-  { "naam": "Vattenfall", "bestand": "vattenfall.csv" }
-]
-```
+## Prijzenlijsten per leverancier toevoegen
 
-3. Commit + push. De site pikt 'm automatisch op in de dropdown — geen
-   verdere code-aanpassingen nodig.
+Zie `data/leveranciers/README.md`. Kort samengevat: prijzen-CSV in de map
+`data/leveranciers/` zetten en committen. De dropdown op de site leest de
+map automatisch uit via de GitHub API — geen los manifest-bestand nodig.
+**Let op:** dit vereist dat de repo openbaar (public) is.
 
-Je kunt `voorbeeld.csv` gerust verwijderen zodra je je eigen bestanden hebt
-toegevoegd (haal 'm dan ook uit `index.json`).
+## Meterdata
 
-De kwartierprijzen-CSV (dynamische uurprijzen) hoort hier **niet** in dit
-mapje — die uploadt de bezoeker altijd zelf via de knop op de site.
+De meter-CSV (iemands eigen kwartier-verbruik/opwek) wordt **niet**
+meegeleverd in de repo. Elke bezoeker uploadt die zelf via de knop op de
+site; er wordt niets naar een server verstuurd.
