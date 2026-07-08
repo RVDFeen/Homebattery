@@ -348,47 +348,59 @@ function setStatus(msg, isErr){
 }
 
 // ---------------------------------------------------------------
-// LEVERANCIERS (mapje data/leveranciers/, gevuld via index.json)
+// LEVERANCIERS (mapje data/leveranciers/ — wordt automatisch
+// uitgelezen via de GitHub API, geen handmatig manifest nodig)
 // ---------------------------------------------------------------
+const GITHUB_OWNER = 'RVDFeen';
+const GITHUB_REPO = 'Homebattery';
+const GITHUB_BRANCH = 'main';
+const LEVERANCIERS_PATH = 'data/leveranciers';
+
+function niceName(filename){
+  return filename.replace(/\.csv$/i,'').replace(/[-_]+/g,' ').replace(/\b\w/g, c=>c.toUpperCase());
+}
+
 async function loadLeveranciersManifest(){
   const select = document.getElementById('leverancierSelect');
   try{
-    const r = await fetch('data/leveranciers/index.json');
-    if(!r.ok) throw new Error('geen manifest gevonden');
-    const lijst = await r.json();
-    for(const item of lijst){
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${LEVERANCIERS_PATH}?ref=${GITHUB_BRANCH}`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('kon mapinhoud niet ophalen (status ' + r.status + ')');
+    const items = await r.json();
+    const csvFiles = items.filter(it => it.type === 'file' && it.name.toLowerCase().endsWith('.csv'));
+    for(const f of csvFiles){
       const opt = document.createElement('option');
-      opt.value = item.bestand;
-      opt.textContent = item.naam;
+      opt.value = f.download_url;
+      opt.textContent = niceName(f.name);
       select.appendChild(opt);
     }
-    if(lijst.length === 0){
-      setStatus('Nog geen leveranciers in data/leveranciers/index.json.');
+    if(csvFiles.length === 0){
+      setStatus('Nog geen CSV-bestanden gevonden in ' + LEVERANCIERS_PATH + '/.');
     }
   }catch(e){
-    setStatus('Kon data/leveranciers/index.json niet laden (' + e.message + '). Upload handmatig een meter-CSV.', true);
+    setStatus('Kon leverancierslijst niet ophalen (' + e.message + '). Upload handmatig een meter-CSV.', true);
   }
 }
 
-async function loadLeverancierCSV(bestand, naam){
+async function loadLeverancierCSV(url, naam){
   try{
-    const r = await fetch('data/leveranciers/' + bestand);
-    if(!r.ok) throw new Error('bestand niet gevonden: ' + bestand);
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('bestand niet gevonden');
     meterRows = loadMeterCSV(await r.text());
     document.getElementById('uploadMeter').classList.add('ok');
-    document.getElementById('uploadMeterText').innerHTML = bestand + '<br><span class="hint">' + meterRows.length + ' uren geladen (' + naam + ')</span>';
+    document.getElementById('uploadMeterText').innerHTML = naam + '<br><span class="hint">' + meterRows.length + ' uren geladen</span>';
     document.getElementById('levVal').textContent = naam;
     recompute();
   }catch(e){
-    setStatus('Fout bij laden van ' + bestand + ': ' + e.message, true);
+    setStatus('Fout bij laden van ' + naam + ': ' + e.message, true);
   }
 }
 
 document.getElementById('leverancierSelect').addEventListener('change', e=>{
-  const bestand = e.target.value;
-  if(!bestand) return;
+  const url = e.target.value;
+  if(!url) return;
   const naam = e.target.options[e.target.selectedIndex].textContent;
-  loadLeverancierCSV(bestand, naam);
+  loadLeverancierCSV(url, naam);
 });
 
 async function tryAutoload(){
