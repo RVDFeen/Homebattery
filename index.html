@@ -432,21 +432,39 @@ async function loadLeveranciersManifest(){
   }
 }
 
+function wacht(ms){ return new Promise(res=>setTimeout(res, ms)); }
+
+async function fetchMetRetry(url, pogingen){
+  let laatsteFout = null;
+  for(let i=0; i<pogingen; i++){
+    try{
+      // cache-buster: voorkomt dat een eerdere lege/foute response uit de
+      // browsercache wordt hergebruikt bij grote bestanden
+      const sep = url.includes('?') ? '&' : '?';
+      const r = await fetch(url + sep + '_=' + Date.now(), {cache:'no-store'});
+      if(!r.ok) throw new Error('bestand niet gevonden (status ' + r.status + ')');
+      const tekst = await r.text();
+      if(!tekst || tekst.trim().length === 0) throw new Error('opgehaald bestand kwam leeg terug');
+      return tekst;
+    }catch(e){
+      laatsteFout = e;
+      if(i < pogingen-1) await wacht(600 * (i+1)); // korte, oplopende pauze
+    }
+  }
+  throw laatsteFout;
+}
+
 async function loadLeverancierPrijzenCSV(url, naam){
   try{
-    const r = await fetch(url);
-    if(!r.ok) throw new Error('bestand niet gevonden (status ' + r.status + ')');
-    priceRawText = await r.text(); priceRawName = naam;
-    if(!priceRawText || priceRawText.trim().length === 0){
-      throw new Error('opgehaald bestand is leeg (mogelijk een netwerk- of rate limit-probleem, probeer het opnieuw)');
-    }
+    setStatus('Bezig met laden van ' + naam + '...');
+    priceRawText = await fetchMetRetry(url, 3); priceRawName = naam;
     priceRows = loadPriceCSV(priceRawText, resMode);
     document.getElementById('uploadPrice').classList.add('ok');
     document.getElementById('uploadPriceText').innerHTML = naam + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
     document.getElementById('levVal').textContent = naam;
     recompute();
   }catch(e){
-    setStatus('Fout bij laden van ' + naam + ': ' + e.message, true);
+    setStatus('Fout bij laden van ' + naam + ' (na meerdere pogingen): ' + e.message + '. Probeer de knop "Of upload handmatig" als dit blijft gebeuren.', true);
   }
 }
 
