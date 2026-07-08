@@ -269,7 +269,9 @@ let priceRawText = null, priceRawName = null;
 // CSV PARSING (klein & afhankelijkheidsvrij)
 // ---------------------------------------------------------------
 function parseCSV(text){
+  if(!text) return [];
   const lines = text.replace(/\r/g,'').split('\n').filter(l=>l.length>0);
+  if(lines.length === 0) return [];
   const header = lines[0].split(',');
   const rows = [];
   for(let i=1;i<lines.length;i++){
@@ -433,8 +435,11 @@ async function loadLeveranciersManifest(){
 async function loadLeverancierPrijzenCSV(url, naam){
   try{
     const r = await fetch(url);
-    if(!r.ok) throw new Error('bestand niet gevonden');
+    if(!r.ok) throw new Error('bestand niet gevonden (status ' + r.status + ')');
     priceRawText = await r.text(); priceRawName = naam;
+    if(!priceRawText || priceRawText.trim().length === 0){
+      throw new Error('opgehaald bestand is leeg (mogelijk een netwerk- of rate limit-probleem, probeer het opnieuw)');
+    }
     priceRows = loadPriceCSV(priceRawText, resMode);
     document.getElementById('uploadPrice').classList.add('ok');
     document.getElementById('uploadPriceText').innerHTML = naam + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
