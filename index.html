@@ -133,20 +133,20 @@
         <h2>Data</h2>
 
         <div class="field">
-          <label>Leverancier <span class="val" id="levVal"></span></label>
+          <label>Prijzen leverancier <span class="val" id="levVal"></span></label>
           <select id="leverancierSelect">
             <option value="">— kies leverancier —</option>
           </select>
-          <div class="hint">Meter-CSV wordt automatisch geladen uit <code>data/leveranciers/</code>.</div>
+          <div class="hint">Prijzen-CSV wordt automatisch geladen uit <code>data/leveranciers/</code>.</div>
         </div>
 
-        <label class="upload" id="uploadMeter">
-          <input type="file" id="fileMeter" accept=".csv">
-          <span id="uploadMeterText">Of upload handmatig een meter-CSV<br><span class="hint">kolommen: time, Import/Export T1/T2 kWh</span></span>
-        </label>
         <label class="upload" id="uploadPrice">
           <input type="file" id="filePrice" accept=".csv">
-          <span id="uploadPriceText">Prijzen-CSV (kwartierprijzen) uploaden<br><span class="hint">kolommen: datum, prijs</span></span>
+          <span id="uploadPriceText">Of upload handmatig een prijzen-CSV<br><span class="hint">kolommen: datum, prijs</span></span>
+        </label>
+        <label class="upload" id="uploadMeter">
+          <input type="file" id="fileMeter" accept=".csv">
+          <span id="uploadMeterText">Meter-CSV (jouw eigen kwartierwaarden) uploaden<br><span class="hint">kolommen: time, Import/Export T1/T2 kWh</span></span>
         </label>
         <div class="status" id="status">Nog geen data geladen.</div>
       </div>
@@ -275,6 +275,13 @@ function hourKeyFromPriceDatum(d){ return d.slice(0,10) + ' ' + d.slice(11,13); 
 
 function loadMeterCSV(text){
   const raw = parseCSV(text);
+  if(raw.length === 0) throw new Error('leeg bestand of geen datarijen gevonden');
+  const kolommen = Object.keys(raw[0]);
+  const verwacht = ['time','Import T1 kWh','Import T2 kWh','Export T1 kWh','Export T2 kWh'];
+  const mist = verwacht.filter(k => !kolommen.includes(k));
+  if(mist.length > 0){
+    throw new Error('dit lijkt geen meter-CSV te zijn (verwachte kolommen ontbreken: ' + mist.join(', ') + '). Is dit misschien een prijzen-CSV? Upload die dan via de "Prijzen-CSV" knop.');
+  }
   raw.sort((a,b)=> a.time < b.time ? -1 : 1);
   // cumulatieve kolommen -> verschil per interval -> optellen per uur
   const hourly = new Map();
@@ -300,9 +307,14 @@ function loadMeterCSV(text){
 
 function loadPriceCSV(text){
   const raw = parseCSV(text);
+  if(raw.length === 0) throw new Error('leeg bestand of geen datarijen gevonden');
+  const kolommen = Object.keys(raw[0]);
+  if(kolommen.length < 2){
+    throw new Error('dit lijkt geen prijzen-CSV te zijn (verwacht kolommen: datum, prijs). Is dit misschien een meter-CSV? Zet die dan in data/leveranciers/.');
+  }
   const map = new Map();
-  const priceCol = Object.keys(raw[0] || {}).includes('prijs') ? 'prijs' : Object.keys(raw[0])[1];
-  const dateCol = Object.keys(raw[0] || {}).includes('datum') ? 'datum' : Object.keys(raw[0])[0];
+  const priceCol = kolommen.includes('prijs') ? 'prijs' : kolommen[1];
+  const dateCol = kolommen.includes('datum') ? 'datum' : kolommen[0];
   for(const r of raw){
     const key = hourKeyFromPriceDatum(r[dateCol]);
     map.set(key, parseFloat(r[priceCol]));
@@ -348,8 +360,8 @@ function setStatus(msg, isErr){
 }
 
 // ---------------------------------------------------------------
-// LEVERANCIERS (mapje data/leveranciers/ — wordt automatisch
-// uitgelezen via de GitHub API, geen handmatig manifest nodig)
+// LEVERANCIERS (mapje data/leveranciers/ met PRIJZEN-CSV's —
+// wordt automatisch uitgelezen via de GitHub API, geen manifest nodig)
 // ---------------------------------------------------------------
 const GITHUB_OWNER = 'RVDFeen';
 const GITHUB_REPO = 'Homebattery';
@@ -378,17 +390,17 @@ async function loadLeveranciersManifest(){
       setStatus('Nog geen CSV-bestanden gevonden in ' + LEVERANCIERS_PATH + '/.');
     }
   }catch(e){
-    setStatus('Kon leverancierslijst niet ophalen (' + e.message + '). Upload handmatig een meter-CSV.', true);
+    setStatus('Kon leverancierslijst niet ophalen (' + e.message + '). Upload handmatig een prijzen-CSV.', true);
   }
 }
 
-async function loadLeverancierCSV(url, naam){
+async function loadLeverancierPrijzenCSV(url, naam){
   try{
     const r = await fetch(url);
     if(!r.ok) throw new Error('bestand niet gevonden');
-    meterRows = loadMeterCSV(await r.text());
-    document.getElementById('uploadMeter').classList.add('ok');
-    document.getElementById('uploadMeterText').innerHTML = naam + '<br><span class="hint">' + meterRows.length + ' uren geladen</span>';
+    priceRows = loadPriceCSV(await r.text());
+    document.getElementById('uploadPrice').classList.add('ok');
+    document.getElementById('uploadPriceText').innerHTML = naam + '<br><span class="hint">' + priceRows.size + ' uurprijzen geladen</span>';
     document.getElementById('levVal').textContent = naam;
     recompute();
   }catch(e){
@@ -400,7 +412,7 @@ document.getElementById('leverancierSelect').addEventListener('change', e=>{
   const url = e.target.value;
   if(!url) return;
   const naam = e.target.options[e.target.selectedIndex].textContent;
-  loadLeverancierCSV(url, naam);
+  loadLeverancierPrijzenCSV(url, naam);
 });
 
 async function tryAutoload(){
