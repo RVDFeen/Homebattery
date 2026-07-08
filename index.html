@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batterij-besparing calculator</title>
+<style>
+  :root{
+    --bg:#0f1410;
+    --panel:#161d18;
+    --panel-2:#1c241e;
+    --line:#2a342c;
+    --text:#eef2ec;
+    --muted:#8ea18f;
+    --amber:#e8b04b;
+    --lime:#9fd856;
+    --red:#e8735f;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); line-height:1.5;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px;}
+  header{margin-bottom:28px;}
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--lime); margin-bottom:8px;
+  }
+  h1{font-size:clamp(24px,4vw,34px); margin:0 0 8px; font-weight:700; letter-spacing:-0.01em;}
+  .sub{color:var(--muted); max-width:640px; font-size:14.5px;}
+
+  .grid{display:grid; grid-template-columns: 340px 1fr; gap:20px;}
+  @media (max-width: 880px){ .grid{grid-template-columns: 1fr;} }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:20px;
+  }
+  .panel + .panel{margin-top:20px;}
+  .panel h2{
+    font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
+    margin:0 0 16px; font-weight:600;
+  }
+
+  .field{margin-bottom:18px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; color:var(--text); margin-bottom:6px;
+  }
+  .field label .val{font-family:var(--mono); color:var(--amber); font-size:13px;}
+  input[type=range]{
+    width:100%; accent-color: var(--lime); height:4px;
+  }
+  select{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 10px; font-family:var(--sans); font-size:13px;
+  }
+  input[type=number]{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 10px; font-family:var(--mono); font-size:13px;
+  }
+  .hint{font-size:11.5px; color:var(--muted); margin-top:4px;}
+
+  .toggle-row{display:flex; gap:8px;}
+  .toggle-btn{
+    flex:1; background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+    padding:9px 8px; border-radius:8px; font-size:12.5px; cursor:pointer; text-align:center;
+    font-family:var(--sans); font-weight:600; transition:.15s;
+  }
+  .toggle-btn.active{background:rgba(159,216,86,0.12); border-color:var(--lime); color:var(--lime);}
+
+  .upload{
+    border:1px dashed var(--line); border-radius:10px; padding:14px; text-align:center;
+    font-size:12.5px; color:var(--muted); cursor:pointer; background:var(--panel-2);
+    margin-bottom:10px;
+  }
+  .upload.ok{border-color:var(--lime); color:var(--lime);}
+  .upload input{display:none;}
+
+  .status{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:10px;}
+  .status.err{color:var(--red);}
+
+  .hero-numbers{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:20px;
+  }
+  .stat{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:16px;
+  }
+  .stat .label{font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:8px;}
+  .stat .num{font-family:var(--mono); font-size:26px; font-weight:700;}
+  .stat .num.pos{color:var(--lime);}
+  .stat .num.neg{color:var(--red);}
+  .stat .sup{font-size:11.5px; color:var(--muted); margin-top:4px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{text-align:right; padding:10px 8px; border-bottom:1px solid var(--line); font-family:var(--mono);}
+  th:first-child, td:first-child{text-align:left; font-family:var(--sans);}
+  th{color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;}
+  td.pos{color:var(--lime);} td.neg{color:var(--red);}
+
+  .barchart{margin-top:24px;}
+  .bars{display:flex; align-items:flex-end; gap:6px; height:150px; margin-top:12px;}
+  .bar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+  .bar{width:100%; border-radius:4px 4px 0 0; background:var(--lime); min-height:2px;}
+  .bar.neg{background:var(--red);}
+  .bar-label{font-size:9.5px; color:var(--muted); margin-top:6px; font-family:var(--mono);}
+
+  .note{
+    font-size:12.5px; color:var(--muted); background:var(--panel-2); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; margin-top:16px;
+  }
+  .note b{color:var(--text);}
+  footer{margin-top:40px; font-size:11.5px; color:var(--muted); text-align:center;}
+  a{color:var(--lime);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Thuisbatterij // besparingsmodel</div>
+    <h1>Hoeveel bespaar ik met een thuisbatterij?</h1>
+    <div class="sub">Upload je kwartier-meterstanden en dynamische uurprijzen, stel je batterij in, en zie direct het effect — met en zonder saldering, naïef of prijs-bewust ontladen.</div>
+  </header>
+
+  <div class="grid">
+    <!-- SETTINGS -->
+    <div>
+      <div class="panel">
+        <h2>Data</h2>
+
+        <div class="field">
+          <label>Leverancier <span class="val" id="levVal"></span></label>
+          <select id="leverancierSelect">
+            <option value="">— kies leverancier —</option>
+          </select>
+          <div class="hint">Meter-CSV wordt automatisch geladen uit <code>data/leveranciers/</code>.</div>
+        </div>
+
+        <label class="upload" id="uploadMeter">
+          <input type="file" id="fileMeter" accept=".csv">
+          <span id="uploadMeterText">Of upload handmatig een meter-CSV<br><span class="hint">kolommen: time, Import/Export T1/T2 kWh</span></span>
+        </label>
+        <label class="upload" id="uploadPrice">
+          <input type="file" id="filePrice" accept=".csv">
+          <span id="uploadPriceText">Prijzen-CSV (kwartierprijzen) uploaden<br><span class="hint">kolommen: datum, prijs</span></span>
+        </label>
+        <div class="status" id="status">Nog geen data geladen.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Batterij</h2>
+        <div class="field">
+          <label>Capaciteit <span class="val" id="capVal">7.0 kWh</span></label>
+          <input type="range" id="cap" min="1" max="30" step="0.5" value="7">
+        </div>
+        <div class="field">
+          <label>Max laadvermogen <span class="val" id="chargeVal">3.5 kW</span></label>
+          <input type="range" id="charge" min="0.5" max="15" step="0.5" value="3.5">
+        </div>
+        <div class="field">
+          <label>Max ontlaadvermogen <span class="val" id="dischargeVal">3.5 kW</span></label>
+          <input type="range" id="discharge" min="0.5" max="15" step="0.5" value="3.5">
+        </div>
+        <div class="field">
+          <label>Round-trip efficiency (RTE) <span class="val" id="rteVal">90%</span></label>
+          <input type="range" id="rte" min="50" max="100" step="1" value="90">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Prijzen &amp; regeling</h2>
+        <div class="field">
+          <label>Exportprijs t.o.v. importprijs <span class="val" id="expfVal">70%</span></label>
+          <input type="range" id="expf" min="0" max="100" step="5" value="70">
+          <div class="hint">Gebruikt als je geen aparte exportprijzen-CSV hebt.</div>
+        </div>
+        <div class="field">
+          <label>Saldering</label>
+          <div class="toggle-row">
+            <div class="toggle-btn active" data-val="1" id="saldAan">Met salderen</div>
+            <div class="toggle-btn" data-val="0" id="saldUit">Zonder salderen</div>
+          </div>
+          <div class="hint">Beide worden altijd berekend — dit bepaalt alleen het hoofdresultaat.</div>
+        </div>
+        <div class="field">
+          <label>Strategie</label>
+          <div class="toggle-row">
+            <div class="toggle-btn" data-val="naive" id="stratNaive">Naïef</div>
+            <div class="toggle-btn active" data-val="smart" id="stratSmart">Prijs-bewust</div>
+          </div>
+        </div>
+        <div class="field" id="reserveField">
+          <label>Winstmarge voor ontladen <span class="val" id="reserveVal">10%</span></label>
+          <input type="range" id="reserve" min="0" max="50" step="5" value="10">
+          <div class="hint">Batterij ontlaadt alleen als de huidige prijs minstens dit percentage boven de gemiddelde kostprijs van de opgeslagen energie ligt.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div>
+      <div class="panel">
+        <h2>Hoofdresultaat</h2>
+        <div class="hero-numbers">
+          <div class="stat">
+            <div class="label">Zonder batterij</div>
+            <div class="num" id="heroBefore">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Met batterij</div>
+            <div class="num" id="heroAfter">—</div>
+          </div>
+          <div class="stat">
+            <div class="label">Besparing / jaar</div>
+            <div class="num" id="heroSavings">—</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr><th>Scenario</th><th>Zonder batterij</th><th>Met batterij</th><th>Besparing</th></tr>
+          </thead>
+          <tbody id="scenarioTable">
+            <tr><td colspan="4" style="text-align:center;color:var(--muted);">Upload je CSV's om te beginnen</td></tr>
+          </tbody>
+        </table>
+
+        <div class="barchart">
+          <h2 style="margin-top:0;">Besparing per maand (hoofdresultaat)</h2>
+          <div class="bars" id="bars"></div>
+        </div>
+      </div>
+
+      <div class="note" id="dataNote" style="display:none;"></div>
+    </div>
+  </div>
+
+  <footer>
+    Statische, client-side calculator — er wordt niets naar een server verstuurd. Alle berekening gebeurt in je browser.
+  </footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// STATE
+// ---------------------------------------------------------------
+let meterRows = null;   // [{hourKey, importKwh, exportKwh}]
+let priceRows = null;   // Map hourKey -> price
+let saldMode = 1;       // 1 = met salderen, 0 = zonder
+let stratMode = 'smart';
+
+// ---------------------------------------------------------------
+// CSV PARSING (klein & afhankelijkheidsvrij)
+// ---------------------------------------------------------------
+function parseCSV(text){
+  const lines = text.replace(/\r/g,'').split('\n').filter(l=>l.length>0);
+  const header = lines[0].split(',');
+  const rows = [];
+  for(let i=1;i<lines.length;i++){
+    const cols = lines[i].split(',');
+    if(cols.length < header.length) continue;
+    const obj = {};
+    for(let j=0;j<header.length;j++) obj[header[j].trim()] = cols[j];
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function hourKeyFromMeterTime(t){ return t.slice(0,13); } // "2025-07-01 00"
+function hourKeyFromPriceDatum(d){ return d.slice(0,10) + ' ' + d.slice(11,13); }
+
+function loadMeterCSV(text){
+  const raw = parseCSV(text);
+  raw.sort((a,b)=> a.time < b.time ? -1 : 1);
+  // cumulatieve kolommen -> verschil per interval -> optellen per uur
+  const hourly = new Map();
+  let prevImp = null, prevExp = null;
+  for(const r of raw){
+    const imp = parseFloat(r['Import T1 kWh']) + parseFloat(r['Import T2 kWh']);
+    const exp = parseFloat(r['Export T1 kWh']) + parseFloat(r['Export T2 kWh']);
+    if(prevImp !== null){
+      const di = Math.max(0, imp - prevImp);
+      const de = Math.max(0, exp - prevExp);
+      const key = hourKeyFromMeterTime(r.time);
+      if(!hourly.has(key)) hourly.set(key, {importKwh:0, exportKwh:0});
+      const h = hourly.get(key);
+      h.importKwh += di; h.exportKwh += de;
+    }
+    prevImp = imp; prevExp = exp;
+  }
+  const out = [];
+  for(const [key, v] of hourly) out.push({hourKey:key, importKwh:v.importKwh, exportKwh:v.exportKwh});
+  out.sort((a,b)=> a.hourKey < b.hourKey ? -1 : 1);
+  return out;
+}
+
+function loadPriceCSV(text){
+  const raw = parseCSV(text);
+  const map = new Map();
+  const priceCol = Object.keys(raw[0] || {}).includes('prijs') ? 'prijs' : Object.keys(raw[0])[1];
+  const dateCol = Object.keys(raw[0] || {}).includes('datum') ? 'datum' : Object.keys(raw[0])[0];
+  for(const r of raw){
+    const key = hourKeyFromPriceDatum(r[dateCol]);
+    map.set(key, parseFloat(r[priceCol]));
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------
+// FILE UPLOAD HANDLERS
+// ---------------------------------------------------------------
+document.getElementById('fileMeter').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      meterRows = loadMeterCSV(reader.result);
+      document.getElementById('uploadMeter').classList.add('ok');
+      document.getElementById('uploadMeterText').innerHTML = f.name + '<br><span class="hint">' + meterRows.length + ' uren geladen</span>';
+      recompute();
+    }catch(err){ setStatus('Fout bij lezen meter-CSV: '+err.message, true); }
+  };
+  reader.readAsText(f);
+});
+
+document.getElementById('filePrice').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      priceRows = loadPriceCSV(reader.result);
+      document.getElementById('uploadPrice').classList.add('ok');
+      document.getElementById('uploadPriceText').innerHTML = f.name + '<br><span class="hint">' + priceRows.size + ' uurprijzen geladen</span>';
+      recompute();
+    }catch(err){ setStatus('Fout bij lezen prijzen-CSV: '+err.message, true); }
+  };
+  reader.readAsText(f);
+});
+
+function setStatus(msg, isErr){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.classList.toggle('err', !!isErr);
+}
+
+// ---------------------------------------------------------------
+// LEVERANCIERS (mapje data/leveranciers/, gevuld via index.json)
+// ---------------------------------------------------------------
+async function loadLeveranciersManifest(){
+  const select = document.getElementById('leverancierSelect');
+  try{
+    const r = await fetch('data/leveranciers/index.json');
+    if(!r.ok) throw new Error('geen manifest gevonden');
+    const lijst = await r.json();
+    for(const item of lijst){
+      const opt = document.createElement('option');
+      opt.value = item.bestand;
+      opt.textContent = item.naam;
+      select.appendChild(opt);
+    }
+    if(lijst.length === 0){
+      setStatus('Nog geen leveranciers in data/leveranciers/index.json.');
+    }
+  }catch(e){
+    setStatus('Kon data/leveranciers/index.json niet laden (' + e.message + '). Upload handmatig een meter-CSV.', true);
+  }
+}
+
+async function loadLeverancierCSV(bestand, naam){
+  try{
+    const r = await fetch('data/leveranciers/' + bestand);
+    if(!r.ok) throw new Error('bestand niet gevonden: ' + bestand);
+    meterRows = loadMeterCSV(await r.text());
+    document.getElementById('uploadMeter').classList.add('ok');
+    document.getElementById('uploadMeterText').innerHTML = bestand + '<br><span class="hint">' + meterRows.length + ' uren geladen (' + naam + ')</span>';
+    document.getElementById('levVal').textContent = naam;
+    recompute();
+  }catch(e){
+    setStatus('Fout bij laden van ' + bestand + ': ' + e.message, true);
+  }
+}
+
+document.getElementById('leverancierSelect').addEventListener('change', e=>{
+  const bestand = e.target.value;
+  if(!bestand) return;
+  const naam = e.target.options[e.target.selectedIndex].textContent;
+  loadLeverancierCSV(bestand, naam);
+});
+
+async function tryAutoload(){
+  await loadLeveranciersManifest();
+  recompute();
+}
+
+// ---------------------------------------------------------------
+// SIMULATIE
+// ---------------------------------------------------------------
+function simulate(data, capacity, chargeKw, dischargeKw, rte, exportFactor, strategy, marginPct){
+  const eff = Math.sqrt(rte/100);
+  const maxC = chargeKw, maxD = dischargeKw; // kWh per uur (1h stap)
+  let soc = 0;
+  let costPool = 0; // som van (euro's betaald, in termen van gemiste exportvergoeding) voor opgeslagen energie
+
+  const out = [];
+  for(const d of data){
+    let newImport = d.importKwh, newExport = d.exportKwh;
+    if(d.exportKwh > 0){
+      const room = (capacity - soc) / eff;
+      const c = Math.min(d.exportKwh, maxC, room);
+      if(c > 0){ soc += c * eff; costPool += c * d.exportPrice; }
+      newExport = d.exportKwh - c;
+    } else if(d.importKwh > 0 && soc > 0){
+      let allow = true;
+      if(strategy === 'smart'){
+        const avgCost = costPool / soc;          // eur per opgeslagen kWh
+        const breakeven = avgCost / eff;          // eur per geleverde kWh (incl. ontlaadverlies)
+        allow = d.importPrice * (1 + marginPct/100) > breakeven;
+      }
+      if(allow){
+        const avail = Math.min(soc*eff, maxD);
+        const dis = Math.min(d.importKwh, avail);
+        if(dis > 0){
+          const storedUsed = dis/eff;
+          if(strategy === 'smart'){ costPool -= storedUsed * (costPool/soc); }
+          soc -= storedUsed;
+        }
+        newImport = d.importKwh - dis;
+      }
+    }
+    out.push({hourKey:d.hourKey, importKwh:newImport, exportKwh:newExport,
+               importPrice:d.importPrice, exportPrice:d.exportPrice, month:d.hourKey.slice(0,7)});
+  }
+  return out;
+}
+
+function kostenZonderSalderen(rows){
+  let cost=0;
+  for(const r of rows) cost += r.importKwh*r.importPrice - r.exportKwh*r.exportPrice;
+  return cost;
+}
+function kostenMetSalderen(rows){
+  let totIn=0, totOut=0, sumInP=0, sumOutP=0;
+  for(const r of rows){ totIn+=r.importKwh; totOut+=r.exportKwh;
+    sumInP += r.importKwh*r.importPrice; sumOutP += r.exportKwh*r.exportPrice; }
+  const avgIn = totIn>0 ? sumInP/totIn : 0;
+  const avgOut = totOut>0 ? sumOutP/totOut : 0;
+  const gesaldeerd = Math.min(totIn, totOut);
+  return (totIn-gesaldeerd)*avgIn - (totOut-gesaldeerd)*avgOut;
+}
+
+function fmtEuro(v){
+  const s = v.toLocaleString('nl-NL', {minimumFractionDigits:2, maximumFractionDigits:2});
+  return (v<0?'-€':'€') + Math.abs(v).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// ---------------------------------------------------------------
+// RECOMPUTE
+// ---------------------------------------------------------------
+function recompute(){
+  if(!meterRows || !priceRows){ setStatus('Wacht op beide CSV\u2019s...'); return; }
+
+  const cap = parseFloat(document.getElementById('cap').value);
+  const chargeKw = parseFloat(document.getElementById('charge').value);
+  const dischargeKw = parseFloat(document.getElementById('discharge').value);
+  const rte = parseFloat(document.getElementById('rte').value);
+  const expf = parseFloat(document.getElementById('expf').value);
+  const reservePct = parseFloat(document.getElementById('reserve').value);
+
+  // koppel meter + prijs per uur
+  const data = [];
+  let missing = 0;
+  for(const m of meterRows){
+    const p = priceRows.get(m.hourKey);
+    if(p === undefined){ missing++; continue; }
+    data.push({hourKey:m.hourKey, importKwh:m.importKwh, exportKwh:m.exportKwh,
+                importPrice:p, exportPrice:p*(expf/100)});
+  }
+
+  if(data.length === 0){ setStatus('Geen overlappende uren gevonden tussen meter- en prijzendata.', true); return; }
+  setStatus(data.length + ' uren gekoppeld' + (missing? ' (' + missing + ' zonder prijsmatch overgeslagen)':'') + '.');
+
+  const base = data; // ongewijzigd = 0 batterij
+  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, expf, stratMode, reservePct);
+
+  const scenarios = {
+    'Zonder salderen': [kostenZonderSalderen(base), kostenZonderSalderen(sim)],
+    'Met salderen':    [kostenMetSalderen(base),    kostenMetSalderen(sim)],
+  };
+
+  // tabel
+  const tbody = document.getElementById('scenarioTable');
+  tbody.innerHTML = '';
+  for(const [naam, [b,a]] of Object.entries(scenarios)){
+    const bespaar = b-a;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${naam}</td><td>${fmtEuro(b)}</td><td>${fmtEuro(a)}</td><td class="${bespaar>=0?'pos':'neg'}">${fmtEuro(bespaar)}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  // hero
+  const heroKey = saldMode ? 'Met salderen' : 'Zonder salderen';
+  const [hb, ha] = scenarios[heroKey];
+  document.getElementById('heroBefore').textContent = fmtEuro(hb);
+  document.getElementById('heroAfter').textContent = fmtEuro(ha);
+  const hs = hb-ha;
+  const hsEl = document.getElementById('heroSavings');
+  hsEl.textContent = fmtEuro(hs);
+  hsEl.className = 'num ' + (hs>=0?'pos':'neg');
+
+  // maandelijkse besparing (hoofdresultaat) voor de balk-grafiek
+  const monthsBase = new Map(), monthsSim = new Map();
+  for(const r of base){ if(!monthsBase.has(r.month)) monthsBase.set(r.month, []); monthsBase.get(r.month).push(r); }
+  for(const r of sim){ if(!monthsSim.has(r.month)) monthsSim.set(r.month, []); monthsSim.get(r.month).push(r); }
+  const months = [...monthsBase.keys()].sort();
+  const monthSavings = months.map(m=>{
+    const fn = saldMode ? kostenMetSalderen : kostenZonderSalderen;
+    return { month:m, savings: fn(monthsBase.get(m)) - fn(monthsSim.get(m) || []) };
+  });
+  const maxAbs = Math.max(1, ...monthSavings.map(x=>Math.abs(x.savings)));
+  const barsEl = document.getElementById('bars');
+  barsEl.innerHTML = '';
+  for(const ms of monthSavings){
+    const col = document.createElement('div'); col.className='bar-col';
+    const bar = document.createElement('div');
+    bar.className = 'bar' + (ms.savings<0 ? ' neg' : '');
+    bar.style.height = Math.max(2, Math.abs(ms.savings)/maxAbs*130) + 'px';
+    bar.title = ms.month + ': ' + fmtEuro(ms.savings);
+    const label = document.createElement('div'); label.className='bar-label'; label.textContent = ms.month.slice(5);
+    col.appendChild(bar); col.appendChild(label);
+    barsEl.appendChild(col);
+  }
+
+  document.getElementById('dataNote').style.display = 'block';
+  document.getElementById('dataNote').innerHTML =
+    '<b>Let op:</b> exportprijs is geschat als importprijs \u00d7 ' + expf + '% (geen aparte exportprijzen-CSV geladen). ' +
+    (stratMode==='smart' ? 'De batterij reserveert lading voor de duurste ' + reservePct + '% van de uren per dag.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).');
+}
+
+// ---------------------------------------------------------------
+// UI BINDINGS
+// ---------------------------------------------------------------
+function bindRange(id, labelId, suffix, decimals){
+  const el = document.getElementById(id);
+  const label = document.getElementById(labelId);
+  const update = ()=>{ label.textContent = parseFloat(el.value).toFixed(decimals) + suffix; recompute(); };
+  el.addEventListener('input', update);
+  update();
+}
+bindRange('cap','capVal',' kWh',1);
+bindRange('charge','chargeVal',' kW',1);
+bindRange('discharge','dischargeVal',' kW',1);
+bindRange('rte','rteVal','%',0);
+bindRange('expf','expfVal','%',0);
+bindRange('reserve','reserveVal','%',0);
+
+document.getElementById('saldAan').addEventListener('click', ()=>{
+  saldMode=1; document.getElementById('saldAan').classList.add('active'); document.getElementById('saldUit').classList.remove('active'); recompute();
+});
+document.getElementById('saldUit').addEventListener('click', ()=>{
+  saldMode=0; document.getElementById('saldUit').classList.add('active'); document.getElementById('saldAan').classList.remove('active'); recompute();
+});
+document.getElementById('stratNaive').addEventListener('click', ()=>{
+  stratMode='naive'; document.getElementById('stratNaive').classList.add('active'); document.getElementById('stratSmart').classList.remove('active');
+  document.getElementById('reserveField').style.opacity='0.4'; recompute();
+});
+document.getElementById('stratSmart').addEventListener('click', ()=>{
+  stratMode='smart'; document.getElementById('stratSmart').classList.add('active'); document.getElementById('stratNaive').classList.remove('active');
+  document.getElementById('reserveField').style.opacity='1'; recompute();
+});
+
+tryAutoload();
+</script>
+</body>
+</html>
