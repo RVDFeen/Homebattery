@@ -501,7 +501,7 @@ function recompute(){
     const p = priceRows.get(m.hourKey);
     if(p === undefined){ missing++; continue; }
     data.push({hourKey:m.hourKey, importKwh:m.importKwh, exportKwh:m.exportKwh,
-                importPrice:p, exportPrice:p*(expf/100)});
+                importPrice:p, exportPrice:p*(expf/100), month:m.hourKey.slice(0,7)});
   }
 
   if(data.length === 0){ setStatus('Geen overlappende uren gevonden tussen meter- en prijzendata.', true); return; }
