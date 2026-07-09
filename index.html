@@ -293,9 +293,9 @@
 // ---------------------------------------------------------------
 let meterRows = null;   // [{hourKey, importKwh, exportKwh}]
 let priceRows = null;   // Map hourKey -> price
-let saldMode = 1;       // 1 = met salderen, 0 = zonder
+let saldMode = 0;       // 1 = met salderen, 0 = zonder
 let stratMode = 'smart';
-let gridChargeMode = 0; // 0 = uit, 1 = aan
+let gridChargeMode = 1; // 0 = uit, 1 = aan
 let resMode = 'uur';    // 'uur' of 'kwartier'
 let meterRawText = null, meterRawName = null;
 let priceRawText = null, priceRawName = null;
@@ -543,45 +543,105 @@ async function tryAutoload(){
 // Dit wordt voor ELK moment opnieuw bepaald (rolling/receding horizon),
 // precies zoals een echt HEMS elk uur zijn plan bijstelt op basis van de
 // nieuwste forecast, in plaats van vooraf de hele dag te kennen.
-function markGridChargeWindow(data, horizonSteps, capacity, maxC, eff){
-  const n = data.length;
-  for(let i=0;i<n;i++){
-    if(data[i].exportKwh > 0){ data[i].gridChargeOk = false; data[i].tekort = 0; continue; }
+function markGridChargeWindow(
+    data,
+    priceHorizonSteps,
+    solarHorizonSteps,
+    capacity,
+    maxChargePerStep,
+    eff,
+    currentSoc = 0
+){
+    const n = data.length;
 
-    const end = Math.min(n, i + horizonSteps);
+    for(let i = 0; i < n; i++){
 
-    // Vooruitblik: raakt de batterij (startend leeg, worst-case) binnen
-    // de horizon vol door de verwachte zon, ook zonder nu bij te laden?
-    let projSoc = 0;
-    let vulMoment = -1;
-    for(let j=i; j<end; j++){
-      if(data[j].exportKwh > 0){
-        const room = (capacity - projSoc) / eff;
-        const c = Math.min(data[j].exportKwh, maxC, Math.max(0, room));
-        projSoc += c * eff;
-        if(projSoc >= capacity - 1e-9){ vulMoment = j; break; }
-      }
+        data[i].gridChargeOk = false;
+        data[i].tekort = 0;
+
+        // Als er nu al zonne-overschot is hoeft er niet vanaf het net geladen te worden
+        if(data[i].exportKwh > 0){
+            continue;
+        }
+
+        const priceEnd = Math.min(n, i + priceHorizonSteps);
+        const solarEnd = Math.min(n, i + solarHorizonSteps);
+
+        // ------------------------------------------------------------
+        // Verwachte zonne-opbrengst binnen de zonne-horizon
+        // ------------------------------------------------------------
+        let projectedSoc = currentSoc;
+        let expectedSolarCharge = 0;
+
+        for(let j = i; j < solarEnd; j++){
+
+            if(data[j].exportKwh <= 0){
+                continue;
+            }
+
+            const room = Math.max(
+                0,
+                (capacity - projectedSoc) / eff
+            );
+
+            const chargeFromSolar = Math.min(
+                data[j].exportKwh,
+                maxChargePerStep,
+                room
+            );
+
+            if(chargeFromSolar <= 0){
+                continue;
+            }
+
+            const storedEnergy = chargeFromSolar * eff;
+
+            projectedSoc += storedEnergy;
+            expectedSolarCharge += storedEnergy;
+
+            // Zodra de batterij volgens de voorspelling vol raakt
+            // hoeven we niet verder vooruit te kijken.
+            if(projectedSoc >= capacity - 0.001){
+                break;
+            }
+        }
+
+        // ------------------------------------------------------------
+        // Hoeveel energie ontbreekt er nog nadat de zon zijn werk heeft gedaan?
+        // ------------------------------------------------------------
+        const remainingEnergyNeeded = Math.max(
+            0,
+            capacity - currentSoc - expectedSolarCharge
+        );
+
+        // Genoeg zon verwacht -> niet laden vanaf het net
+        if(remainingEnergyNeeded <= 0){
+            continue;
+        }
+
+        // ------------------------------------------------------------
+        // Zoek goedkoopste prijs binnen prijs-horizon
+        // ------------------------------------------------------------
+        let cheapestPrice = Infinity;
+
+        for(let j = i; j < priceEnd; j++){
+            cheapestPrice = Math.min(
+                cheapestPrice,
+                data[j].importPrice
+            );
+        }
+
+        // Alleen laden op negatieve prijzen of op het goedkoopste moment
+        if(
+            data[i].importPrice < 0 ||
+            data[i].importPrice <= cheapestPrice + 0.000001
+        ){
+            data[i].gridChargeOk = true;
+
+            // Laad nooit meer dan nodig
+            data[i].tekort = remainingEnergyNeeded;
+        }
     }
-
-    // Venster loopt tot het moment dat de batterij (geprojecteerd) vol
-    // raakt, of tot het horizon-einde als dat niet gebeurt.
-    const winEnd = vulMoment >= 0 ? vulMoment : end;
-
-    let verwachtTekort = 0;
-    for(let j=i; j<winEnd; j++){
-      verwachtTekort += data[j].importKwh;
-    }
-
-    if(verwachtTekort <= 0){ data[i].gridChargeOk = false; data[i].tekort = 0; continue; }
-
-    let minPrice = data[i].importPrice;
-    for(let j=i+1; j<winEnd; j++){
-      if(data[j].importPrice < minPrice) minPrice = data[j].importPrice;
-    }
-
-    data[i].tekort = verwachtTekort;
-    data[i].gridChargeOk = (data[i].importPrice <= 0) || (data[i].importPrice <= minPrice);
-  }
 }
 
 // ---------------------------------------------------------------
@@ -691,12 +751,35 @@ function recompute(){
 
   const base = data; // ongewijzigd = 0 batterij
   const stepHours = resMode === 'kwartier' ? 0.25 : 1;
-  const horizonUur = parseFloat(document.getElementById('horizon').value);
-  const horizonSteps = Math.max(1, Math.round(horizonUur / stepHours));
+  const priceHorizonHours = parseFloat(
+      document.getElementById('horizon').value
+  ); // bijvoorbeeld 8 uur
+
+  const solarHorizonHours = 24;
+
+  const priceHorizonSteps = Math.max(
+      1,
+      Math.round(priceHorizonHours / stepHours)
+  );
+
+  const solarHorizonSteps = Math.max(
+      1,
+      Math.round(solarHorizonHours / stepHours)
+  );
+
   if(gridChargeMode){
-    const maxCForHorizon = chargeKw * stepHours;
-    const effForHorizon = Math.sqrt(rte/100);
-    markGridChargeWindow(data, horizonSteps, cap, maxCForHorizon, effForHorizon);
+      const maxCForHorizon = chargeKw * stepHours;
+      const effForHorizon = Math.sqrt(rte/100);
+
+      markGridChargeWindow(
+          data,
+          priceHorizonSteps,
+          solarHorizonSteps,
+          cap,
+          maxCForHorizon,
+          effForHorizon,
+          0
+      );
   }
   const sim = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours, gridChargeMode===1);
 
