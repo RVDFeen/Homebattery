@@ -182,10 +182,22 @@
 
       <div class="panel">
         <h2>Prijzen &amp; regeling</h2>
+        <div class="hint" style="margin-bottom:12px;">
+          De prijzen-CSV bevat de volledige kWh-prijs <b>mét salderen</b> (Inkoopprijs + Energiebelasting +
+          Inkoopvergoeding, plus Btw). Zonder salderen krijg je voor teruglevering alleen de kale inkoopprijs terug —
+          energiebelasting, inkoopvergoeding en btw gaan er dan vanaf.
+        </div>
         <div class="field">
-          <label>Exportprijs t.o.v. importprijs <span class="val" id="expfVal">70%</span></label>
-          <input type="range" id="expf" min="0" max="100" step="5" value="70">
-          <div class="hint">Gebruikt als je geen aparte exportprijzen-CSV hebt.</div>
+          <label>Energiebelasting <span class="val" id="energiebelastingVal">€ 0,092</span> / kWh</label>
+          <input type="range" id="energiebelasting" min="0" max="0.2" step="0.001" value="0.092">
+        </div>
+        <div class="field">
+          <label>Inkoopvergoeding <span class="val" id="inkoopvergoedingVal">€ 0,017</span> / kWh</label>
+          <input type="range" id="inkoopvergoeding" min="0" max="0.1" step="0.001" value="0.017">
+        </div>
+        <div class="field">
+          <label>Btw <span class="val" id="btwVal">21%</span></label>
+          <input type="range" id="btw" min="0" max="25" step="1" value="21">
         </div>
         <div class="field">
           <label>Saldering</label>
@@ -483,7 +495,7 @@ async function tryAutoload(){
 // ---------------------------------------------------------------
 // SIMULATIE
 // ---------------------------------------------------------------
-function simulate(data, capacity, chargeKw, dischargeKw, rte, exportFactor, strategy, marginPct, stepHours){
+function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPct, stepHours){
   const eff = Math.sqrt(rte/100);
   const maxC = chargeKw * stepHours, maxD = dischargeKw * stepHours; // kWh per stap
   let soc = 0;
@@ -551,7 +563,9 @@ function recompute(){
   const chargeKw = parseFloat(document.getElementById('charge').value);
   const dischargeKw = parseFloat(document.getElementById('discharge').value);
   const rte = parseFloat(document.getElementById('rte').value);
-  const expf = parseFloat(document.getElementById('expf').value);
+  const energiebelasting = parseFloat(document.getElementById('energiebelasting').value);
+  const inkoopvergoeding = parseFloat(document.getElementById('inkoopvergoeding').value);
+  const btw = parseFloat(document.getElementById('btw').value);
   const reservePct = parseFloat(document.getElementById('reserve').value);
 
   // koppel meter + prijs per bucket (uur of kwartier)
@@ -560,8 +574,11 @@ function recompute(){
   for(const m of meterRows){
     const p = lookupPrice(priceRows, m.hourKey, resMode);
     if(p === undefined){ missing++; continue; }
+    // p = volledige (met-salderen) kWh-prijs incl. energiebelasting, inkoopvergoeding en btw.
+    // Zonder salderen krijg je alleen de kale inkoopprijs terug voor teruglevering:
+    const kaleInkoopprijs = p/(1+btw/100) - energiebelasting - inkoopvergoeding;
     data.push({hourKey:m.hourKey, importKwh:m.importKwh, exportKwh:m.exportKwh,
-                importPrice:p, exportPrice:p*(expf/100), month:m.hourKey.slice(0,7)});
+                importPrice:p, exportPrice:kaleInkoopprijs, month:m.hourKey.slice(0,7)});
   }
 
   const eenheid = resMode === 'kwartier' ? 'kwartieren' : 'uren';
@@ -570,7 +587,7 @@ function recompute(){
 
   const base = data; // ongewijzigd = 0 batterij
   const stepHours = resMode === 'kwartier' ? 0.25 : 1;
-  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, expf, stratMode, reservePct, stepHours);
+  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours);
 
   const scenarios = {
     'Zonder salderen': [kostenZonderSalderen(base), kostenZonderSalderen(sim)],
@@ -622,7 +639,7 @@ function recompute(){
 
   document.getElementById('dataNote').style.display = 'block';
   document.getElementById('dataNote').innerHTML =
-    '<b>Let op:</b> exportprijs is geschat als importprijs \u00d7 ' + expf + '% (geen aparte exportprijzen-CSV geladen). ' +
+    '<b>Let op:</b> exportprijs (kale inkoopprijs) = prijs \u00f7 (1 + btw) \u2212 energiebelasting \u2212 inkoopvergoeding. ' +
     (stratMode==='smart' ? 'De batterij reserveert lading voor de duurste ' + reservePct + '% van de uren per dag.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).');
 }
 
@@ -636,11 +653,20 @@ function bindRange(id, labelId, suffix, decimals){
   el.addEventListener('input', update);
   update();
 }
+function bindRangeEuro(id, labelId, decimals){
+  const el = document.getElementById(id);
+  const label = document.getElementById(labelId);
+  const update = ()=>{ label.textContent = '€ ' + parseFloat(el.value).toFixed(decimals).replace('.', ','); recompute(); };
+  el.addEventListener('input', update);
+  update();
+}
 bindRange('cap','capVal',' kWh',1);
 bindRange('charge','chargeVal',' kW',1);
 bindRange('discharge','dischargeVal',' kW',1);
 bindRange('rte','rteVal','%',0);
-bindRange('expf','expfVal','%',0);
+bindRangeEuro('energiebelasting','energiebelastingVal',3);
+bindRangeEuro('inkoopvergoeding','inkoopvergoedingVal',3);
+bindRange('btw','btwVal','%',0);
 bindRange('reserve','reserveVal','%',0);
 
 document.getElementById('saldAan').addEventListener('click', ()=>{
