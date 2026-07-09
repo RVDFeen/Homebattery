@@ -21,6 +21,10 @@ Ondersteunt:
 * Import/export energie
 * Uur- en kwartierwaarden
 
+## Energieprijzen
+
+De meegeleverde dynamische energieprijzen zijn momenteel beschikbaar tot **juli 2026**.
+
 ## Privacy
 
 Volledig lokaal in je browser.
