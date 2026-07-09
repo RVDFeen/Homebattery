@@ -219,6 +219,19 @@
           <input type="range" id="reserve" min="0" max="50" step="5" value="10">
           <div class="hint">Batterij ontlaadt alleen als de huidige prijs minstens dit percentage boven de gemiddelde kostprijs van de opgeslagen energie ligt.</div>
         </div>
+        <div class="field">
+          <label>Slim laden (vanaf net)</label>
+          <div class="toggle-row">
+            <div class="toggle-btn active" data-val="0" id="gridChargeUit">Uit</div>
+            <div class="toggle-btn" data-val="1" id="gridChargeAan">Aan</div>
+          </div>
+          <div class="hint">Laadt de batterij ook op vanaf het net tijdens de goedkoopste uren van de dag — ook zonder zonneoverschot — om te ontladen tijdens de dure piekuren. Vooral relevant in de winter.</div>
+        </div>
+        <div class="field" id="gridChargePctField" style="opacity:0.4">
+          <label>Goedkoopste uren om op te laden <span class="val" id="gridChargePctVal">25%</span></label>
+          <input type="range" id="gridChargePct" min="5" max="75" step="5" value="25">
+          <div class="hint">Per dag worden de goedkoopste X% van de uren aangemerkt als laadmoment (mits er nog batterijruimte is).</div>
+        </div>
       </div>
     </div>
 
@@ -273,6 +286,7 @@ let meterRows = null;   // [{hourKey, importKwh, exportKwh}]
 let priceRows = null;   // Map hourKey -> price
 let saldMode = 1;       // 1 = met salderen, 0 = zonder
 let stratMode = 'smart';
+let gridChargeMode = 0; // 0 = uit, 1 = aan
 let resMode = 'uur';    // 'uur' of 'kwartier'
 let meterRawText = null, meterRawName = null;
 let priceRawText = null, priceRawName = null;
@@ -495,20 +509,30 @@ async function tryAutoload(){
 // ---------------------------------------------------------------
 // SIMULATIE
 // ---------------------------------------------------------------
-function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPct, stepHours){
+function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPct, stepHours, gridChargeEnabled){
   const eff = Math.sqrt(rte/100);
   const maxC = chargeKw * stepHours, maxD = dischargeKw * stepHours; // kWh per stap
   let soc = 0;
-  let costPool = 0; // som van (euro's betaald, in termen van gemiste exportvergoeding) voor opgeslagen energie
+  let costPool = 0; // som van (euro's betaald) voor opgeslagen energie \u2014 exportprijs bij zon, inkoopprijs bij slim laden
 
   const out = [];
   for(const d of data){
     let newImport = d.importKwh, newExport = d.exportKwh;
     if(d.exportKwh > 0){
+      // zonneoverschot: eerst altijd hiermee opladen (gratis, geen extra netbelasting)
       const room = (capacity - soc) / eff;
       const c = Math.min(d.exportKwh, maxC, room);
       if(c > 0){ soc += c * eff; costPool += c * d.exportPrice; }
       newExport = d.exportKwh - c;
+    } else if(gridChargeEnabled && d.cheap && soc < capacity){
+      // slim laden: geen zonneoverschot, maar wel een goedkoop uur \u2014 laad bij vanaf het net
+      const room = (capacity - soc) / eff;
+      const c = Math.min(maxC, room);
+      if(c > 0){
+        soc += c * eff;
+        costPool += c * d.importPrice;
+        newImport = d.importKwh + c; // extra afname t.o.v. de meterstand
+      }
     } else if(d.importKwh > 0 && soc > 0){
       let allow = true;
       if(strategy === 'smart'){
@@ -531,6 +555,22 @@ function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPc
                importPrice:d.importPrice, exportPrice:d.exportPrice, month:d.hourKey.slice(0,7)});
   }
   return out;
+}
+
+// Markeert per dag de goedkoopste X% van de uren (op basis van importPrice) als 'cheap'.
+function markCheapHours(data, pct){
+  const byDay = new Map();
+  for(const d of data){
+    const day = d.hourKey.slice(0,10);
+    if(!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(d);
+  }
+  for(const rows of byDay.values()){
+    const sorted = [...rows].sort((a,b)=>a.importPrice - b.importPrice);
+    const n = Math.max(1, Math.round(sorted.length * pct/100));
+    const threshold = sorted[n-1].importPrice;
+    for(const r of rows) r.cheap = r.importPrice <= threshold;
+  }
 }
 
 function kostenZonderSalderen(rows){
@@ -587,7 +627,9 @@ function recompute(){
 
   const base = data; // ongewijzigd = 0 batterij
   const stepHours = resMode === 'kwartier' ? 0.25 : 1;
-  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours);
+  const gridChargePct = parseFloat(document.getElementById('gridChargePct').value);
+  if(gridChargeMode) markCheapHours(data, gridChargePct);
+  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours, gridChargeMode===1);
 
   const scenarios = {
     'Zonder salderen': [kostenZonderSalderen(base), kostenZonderSalderen(sim)],
@@ -640,7 +682,8 @@ function recompute(){
   document.getElementById('dataNote').style.display = 'block';
   document.getElementById('dataNote').innerHTML =
     '<b>Let op:</b> exportprijs (kale inkoopprijs) = prijs \u00f7 (1 + btw) \u2212 energiebelasting \u2212 inkoopvergoeding. ' +
-    (stratMode==='smart' ? 'De batterij reserveert lading voor de duurste ' + reservePct + '% van de uren per dag.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).');
+    (stratMode==='smart' ? 'De batterij reserveert lading voor de duurste ' + reservePct + '% van de uren per dag.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).') +
+    (gridChargeMode ? ' Slim laden staat aan: de batterij laadt ook vanaf het net bij tijdens de goedkoopste ' + gridChargePct + '% van de uren per dag, ook zonder zonneoverschot.' : '');
 }
 
 // ---------------------------------------------------------------
@@ -668,6 +711,7 @@ bindRangeEuro('energiebelasting','energiebelastingVal',3);
 bindRangeEuro('inkoopvergoeding','inkoopvergoedingVal',3);
 bindRange('btw','btwVal','%',0);
 bindRange('reserve','reserveVal','%',0);
+bindRange('gridChargePct','gridChargePctVal','%',0);
 
 document.getElementById('saldAan').addEventListener('click', ()=>{
   saldMode=1; document.getElementById('saldAan').classList.add('active'); document.getElementById('saldUit').classList.remove('active'); recompute();
@@ -682,6 +726,15 @@ document.getElementById('stratNaive').addEventListener('click', ()=>{
 document.getElementById('stratSmart').addEventListener('click', ()=>{
   stratMode='smart'; document.getElementById('stratSmart').classList.add('active'); document.getElementById('stratNaive').classList.remove('active');
   document.getElementById('reserveField').style.opacity='1'; recompute();
+});
+
+document.getElementById('gridChargeUit').addEventListener('click', ()=>{
+  gridChargeMode=0; document.getElementById('gridChargeUit').classList.add('active'); document.getElementById('gridChargeAan').classList.remove('active');
+  document.getElementById('gridChargePctField').style.opacity='0.4'; recompute();
+});
+document.getElementById('gridChargeAan').addEventListener('click', ()=>{
+  gridChargeMode=1; document.getElementById('gridChargeAan').classList.add('active'); document.getElementById('gridChargeUit').classList.remove('active');
+  document.getElementById('gridChargePctField').style.opacity='1'; recompute();
 });
 
 function setResolutie(nieuw){
