@@ -1,27 +1,27 @@
-# Batterij-besparing calculator
+# 🔋 Homebattery — Thuisbatterij Simulator
 
-Statische, client-side calculator (geen server nodig). Alles draait in de
-browser van de bezoeker.
+Simuleer de besparing van een thuisbatterij met je eigen energieverbruik en dynamische stroomprijzen.
 
-## Op GitHub Pages zetten
+🌐 **Live demo:**
+https://rvdfeen.github.io/Homebattery
 
-1. Zet deze hele map (met `index.html` en de map `data/`) in je repo
-   `RVDFeen/Homebattery`.
-2. Ga naar **Settings → Pages**.
-3. Kies bij **Source**: "Deploy from a branch", branch `main`, map `/ (root)`.
-4. Na een minuut is de site live op `https://rvdfeen.github.io/homebattery/`.
+## Functies
 
-Geen build-stap, geen Actions-workflow nodig — het is puur statische HTML/CSS/JS.
+* 🔋 Thuisbatterij simulatie
+* ⚡ Dynamische energieprijzen
+* ☀️ Slim laden op basis van prijs en zonneverwachting
+* 💶 Vergelijking met/zonder batterij en met/zonder salderen
 
-## Prijzenlijsten per leverancier toevoegen
+## CSV ondersteuning
 
-Zie `data/leveranciers/README.md`. Kort samengevat: prijzen-CSV in de map
-`data/leveranciers/` zetten en committen. De dropdown op de site leest de
-map automatisch uit via de GitHub API — geen los manifest-bestand nodig.
-**Let op:** dit vereist dat de repo openbaar (public) is.
+Getest met CSV-exportbestanden van **HomeWizard**.
 
-## Meterdata
+Ondersteunt:
 
-De meter-CSV (iemands eigen kwartier-verbruik/opwek) wordt **niet**
-meegeleverd in de repo. Elke bezoeker uploadt die zelf via de knop op de
-site; er wordt niets naar een server verstuurd.
+* Import/export energie
+* Uur- en kwartierwaarden
+
+## Privacy
+
+Volledig lokaal in je browser.
+Geen data wordt opgeslagen of verstuurd.
