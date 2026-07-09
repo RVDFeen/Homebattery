@@ -226,9 +226,10 @@
             <div class="toggle-btn" data-val="1" id="gridChargeAan">Aan</div>
           </div>
           <div class="hint">
-            Laadt de batterij alleen vanaf het net als er, binnen je vooruitkijkhorizon, een verwacht tekort is dat
-            de eerstvolgende zon niet meer op tijd oplost — en dan alleen op het goedkoopste (of negatieve) moment
-            binnen dat venster. Is er binnen de horizon al zon in zicht die het tekort dekt? Dan laadt hij niet bij.
+            Laadt de batterij alleen vanaf het net als de verwachte zon, binnen je vooruitkijkhorizon, hem
+            (uitgaande van een lege start) niet vol genoeg krijgt — en dan alleen op het goedkoopste (of negatieve)
+            moment binnen dat venster. Is er binnen de horizon genoeg zon om 'm helemaal vol te laden? Dan laadt
+            hij niet bij vanaf het net.
           </div>
         </div>
         <div class="field" id="horizonField" style="opacity:0.4">
@@ -515,41 +516,66 @@ async function tryAutoload(){
 }
 
 // ---------------------------------------------------------------
-// SLIM LADEN — rolling forecast-horizon
+// SLIM LADEN — rolling forecast-horizon met vooruitblik-simulatie
 // ---------------------------------------------------------------
-// Voor elk moment zonder zonoverschot wordt gekeken naar het venster
-// [t, t + horizonSteps) — maar het venster stopt zodra er binnen die
-// horizon al een moment met zonoverschot in zicht komt (dan is bijladen
-// vanaf het net voor dat stuk niet meer nodig, de zon lost het zelf op).
+// Voor elk moment zonder zonoverschot wordt binnen het venster
+// [t, t + horizonSteps) eerst geprojecteerd of de batterij — uitgaande
+// van een LEGE start (worst-case: we laden nu niet bij) — daadwerkelijk
+// vol raakt door de verwachte zon binnen die horizon. Dit houdt rekening
+// met het laadvermogen, het rendement en de batterijcapaciteit; een klein
+// beetje zon in het vooruitzicht is dus niet meer genoeg om het venster
+// te laten stoppen — er moet ook echt voldoende zon zijn om 'm vol te
+// maken (bijv. "morgen genoeg zon om vol te laden" -> vannacht niet
+// bijladen; "morgen bewolkt, te weinig zon" -> wel bijladen).
+//
+// Raakt de batterij binnen de horizon geprojecteerd vol? Dan stopt het
+// venster op dat moment (de zon lost de rest zelf op). Raakt hij niet
+// vol? Dan telt de HELE horizon mee voor het tekort.
 //
 // Binnen dat venster wordt bepaald:
-//  1) verwachtTekort = som van het resterende importKwh tot aan dat zon-
-//     moment (of horizon-einde). Is dit <= 0, dan is er niets te doen.
+//  1) verwachtTekort = som van het importKwh binnen het venster. Is dit
+//     <= 0, dan is er niets te doen.
 //  2) is dit uur de goedkoopste (of een negatieve) prijs binnen dat venster?
 //     Zo ja: markeer als geschikt laadmoment, met een laadplafond gelijk
 //     aan het verwachte tekort (zodat er niet verder wordt volgepompt dan
-//     nodig is om het gat tot de volgende zon te dichten).
+//     nodig is om het gat tot de volgende (voldoende) zon te dichten).
 //
 // Dit wordt voor ELK moment opnieuw bepaald (rolling/receding horizon),
 // precies zoals een echt HEMS elk uur zijn plan bijstelt op basis van de
 // nieuwste forecast, in plaats van vooraf de hele dag te kennen.
-function markGridChargeWindow(data, horizonSteps){
+function markGridChargeWindow(data, horizonSteps, capacity, maxC, eff){
   const n = data.length;
   for(let i=0;i<n;i++){
     if(data[i].exportKwh > 0){ data[i].gridChargeOk = false; data[i].tekort = 0; continue; }
 
     const end = Math.min(n, i + horizonSteps);
-    let verwachtTekort = 0;
+
+    // Vooruitblik: raakt de batterij (startend leeg, worst-case) binnen
+    // de horizon vol door de verwachte zon, ook zonder nu bij te laden?
+    let projSoc = 0;
+    let vulMoment = -1;
     for(let j=i; j<end; j++){
-      if(data[j].exportKwh > 0) break; // zon in zicht binnen horizon -> venster stopt hier
+      if(data[j].exportKwh > 0){
+        const room = (capacity - projSoc) / eff;
+        const c = Math.min(data[j].exportKwh, maxC, Math.max(0, room));
+        projSoc += c * eff;
+        if(projSoc >= capacity - 1e-9){ vulMoment = j; break; }
+      }
+    }
+
+    // Venster loopt tot het moment dat de batterij (geprojecteerd) vol
+    // raakt, of tot het horizon-einde als dat niet gebeurt.
+    const winEnd = vulMoment >= 0 ? vulMoment : end;
+
+    let verwachtTekort = 0;
+    for(let j=i; j<winEnd; j++){
       verwachtTekort += data[j].importKwh;
     }
 
     if(verwachtTekort <= 0){ data[i].gridChargeOk = false; data[i].tekort = 0; continue; }
 
     let minPrice = data[i].importPrice;
-    for(let j=i+1; j<end; j++){
-      if(data[j].exportKwh > 0) break;
+    for(let j=i+1; j<winEnd; j++){
       if(data[j].importPrice < minPrice) minPrice = data[j].importPrice;
     }
 
@@ -667,7 +693,11 @@ function recompute(){
   const stepHours = resMode === 'kwartier' ? 0.25 : 1;
   const horizonUur = parseFloat(document.getElementById('horizon').value);
   const horizonSteps = Math.max(1, Math.round(horizonUur / stepHours));
-  if(gridChargeMode) markGridChargeWindow(data, horizonSteps);
+  if(gridChargeMode){
+    const maxCForHorizon = chargeKw * stepHours;
+    const effForHorizon = Math.sqrt(rte/100);
+    markGridChargeWindow(data, horizonSteps, cap, maxCForHorizon, effForHorizon);
+  }
   const sim = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours, gridChargeMode===1);
 
   const scenarios = {
@@ -722,7 +752,7 @@ function recompute(){
   document.getElementById('dataNote').innerHTML =
     '<b>Let op:</b> exportprijs (kale inkoopprijs) = prijs \u00f7 (1 + btw) \u2212 energiebelasting \u2212 inkoopvergoeding. ' +
     (stratMode==='smart' ? 'De batterij reserveert lading voor de duurste ' + reservePct + '% van de uren per dag.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).') +
-    (gridChargeMode ? ' Slim laden staat aan: per moment wordt gekeken naar de eerstvolgende ' + horizonUur + ' uur — is er binnen dat venster al zon in zicht die het tekort dekt, dan laadt hij niet bij; is er wel een resterend tekort, dan laadt hij alleen bij op het goedkoopste (of negatieve) moment daarbinnen, en niet meer dan dat tekort vraagt.' : '');
+    (gridChargeMode ? ' Slim laden staat aan: per moment wordt binnen de eerstvolgende ' + horizonUur + ' uur geprojecteerd of de batterij (uitgaande van een lege start) daadwerkelijk vol raakt door de verwachte zon — is dat zo, dan laadt hij niet bij; raakt hij niet vol (te weinig zon binnen de horizon), dan laadt hij alleen bij op het goedkoopste (of negatieve) moment daarbinnen, en niet meer dan het berekende tekort vraagt.' : '');
 }
 
 // ---------------------------------------------------------------
