@@ -225,12 +225,20 @@
             <div class="toggle-btn active" data-val="0" id="gridChargeUit">Uit</div>
             <div class="toggle-btn" data-val="1" id="gridChargeAan">Aan</div>
           </div>
-          <div class="hint">Laadt de batterij ook op vanaf het net tijdens de goedkoopste uren van de dag — ook zonder zonneoverschot — om te ontladen tijdens de dure piekuren. Vooral relevant in de winter.</div>
+          <div class="hint">
+            Laadt de batterij alleen vanaf het net als er, binnen je vooruitkijkhorizon, een verwacht tekort is dat
+            de eerstvolgende zon niet meer op tijd oplost — en dan alleen op het goedkoopste (of negatieve) moment
+            binnen dat venster. Is er binnen de horizon al zon in zicht die het tekort dekt? Dan laadt hij niet bij.
+          </div>
         </div>
-        <div class="field" id="gridChargePctField" style="opacity:0.4">
-          <label>Goedkoopste uren om op te laden <span class="val" id="gridChargePctVal">25%</span></label>
-          <input type="range" id="gridChargePct" min="5" max="75" step="5" value="25">
-          <div class="hint">Per dag worden de goedkoopste X% van de uren aangemerkt als laadmoment (mits er nog batterijruimte is).</div>
+        <div class="field" id="horizonField" style="opacity:0.4">
+          <label>Vooruitkijkhorizon <span class="val" id="horizonVal">8 uur</span></label>
+          <input type="range" id="horizon" min="1" max="24" step="1" value="8">
+          <div class="hint">
+            Hoe ver je (weer/prijs)voorspelling in de praktijk vooruitkijkt. Het model beslist elk moment opnieuw,
+            op basis van alleen de data binnen dit venster — net als een echt HEMS dat elk uur zijn plan bijstelt
+            naarmate nieuwe forecast-data binnenkomt.
+          </div>
         </div>
       </div>
     </div>
@@ -507,6 +515,50 @@ async function tryAutoload(){
 }
 
 // ---------------------------------------------------------------
+// SLIM LADEN — rolling forecast-horizon
+// ---------------------------------------------------------------
+// Voor elk moment zonder zonoverschot wordt gekeken naar het venster
+// [t, t + horizonSteps) — maar het venster stopt zodra er binnen die
+// horizon al een moment met zonoverschot in zicht komt (dan is bijladen
+// vanaf het net voor dat stuk niet meer nodig, de zon lost het zelf op).
+//
+// Binnen dat venster wordt bepaald:
+//  1) verwachtTekort = som van het resterende importKwh tot aan dat zon-
+//     moment (of horizon-einde). Is dit <= 0, dan is er niets te doen.
+//  2) is dit uur de goedkoopste (of een negatieve) prijs binnen dat venster?
+//     Zo ja: markeer als geschikt laadmoment, met een laadplafond gelijk
+//     aan het verwachte tekort (zodat er niet verder wordt volgepompt dan
+//     nodig is om het gat tot de volgende zon te dichten).
+//
+// Dit wordt voor ELK moment opnieuw bepaald (rolling/receding horizon),
+// precies zoals een echt HEMS elk uur zijn plan bijstelt op basis van de
+// nieuwste forecast, in plaats van vooraf de hele dag te kennen.
+function markGridChargeWindow(data, horizonSteps){
+  const n = data.length;
+  for(let i=0;i<n;i++){
+    if(data[i].exportKwh > 0){ data[i].gridChargeOk = false; data[i].tekort = 0; continue; }
+
+    const end = Math.min(n, i + horizonSteps);
+    let verwachtTekort = 0;
+    for(let j=i; j<end; j++){
+      if(data[j].exportKwh > 0) break; // zon in zicht binnen horizon -> venster stopt hier
+      verwachtTekort += data[j].importKwh;
+    }
+
+    if(verwachtTekort <= 0){ data[i].gridChargeOk = false; data[i].tekort = 0; continue; }
+
+    let minPrice = data[i].importPrice;
+    for(let j=i+1; j<end; j++){
+      if(data[j].exportKwh > 0) break;
+      if(data[j].importPrice < minPrice) minPrice = data[j].importPrice;
+    }
+
+    data[i].tekort = verwachtTekort;
+    data[i].gridChargeOk = (data[i].importPrice <= 0) || (data[i].importPrice <= minPrice);
+  }
+}
+
+// ---------------------------------------------------------------
 // SIMULATIE
 // ---------------------------------------------------------------
 function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPct, stepHours, gridChargeEnabled){
@@ -524,10 +576,12 @@ function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPc
       const c = Math.min(d.exportKwh, maxC, room);
       if(c > 0){ soc += c * eff; costPool += c * d.exportPrice; }
       newExport = d.exportKwh - c;
-    } else if(gridChargeEnabled && d.cheap && soc < capacity){
-      // slim laden: geen zonneoverschot, maar wel een goedkoop uur \u2014 laad bij vanaf het net
+    } else if(gridChargeEnabled && d.gridChargeOk && soc < capacity){
+      // slim laden: geen zonneoverschot, maar wel een verwacht tekort tot de
+      // eerstvolgende zon (of horizon-einde) én dit is het goedkoopste/negatieve
+      // moment daarbinnen. Laad niet meer bij dan het verwachte tekort vraagt.
       const room = (capacity - soc) / eff;
-      const c = Math.min(maxC, room);
+      const c = Math.min(maxC, room, d.tekort);
       if(c > 0){
         soc += c * eff;
         costPool += c * d.importPrice;
@@ -555,22 +609,6 @@ function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPc
                importPrice:d.importPrice, exportPrice:d.exportPrice, month:d.hourKey.slice(0,7)});
   }
   return out;
-}
-
-// Markeert per dag de goedkoopste X% van de uren (op basis van importPrice) als 'cheap'.
-function markCheapHours(data, pct){
-  const byDay = new Map();
-  for(const d of data){
-    const day = d.hourKey.slice(0,10);
-    if(!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push(d);
-  }
-  for(const rows of byDay.values()){
-    const sorted = [...rows].sort((a,b)=>a.importPrice - b.importPrice);
-    const n = Math.max(1, Math.round(sorted.length * pct/100));
-    const threshold = sorted[n-1].importPrice;
-    for(const r of rows) r.cheap = r.importPrice <= threshold;
-  }
 }
 
 function kostenZonderSalderen(rows){
@@ -627,8 +665,9 @@ function recompute(){
 
   const base = data; // ongewijzigd = 0 batterij
   const stepHours = resMode === 'kwartier' ? 0.25 : 1;
-  const gridChargePct = parseFloat(document.getElementById('gridChargePct').value);
-  if(gridChargeMode) markCheapHours(data, gridChargePct);
+  const horizonUur = parseFloat(document.getElementById('horizon').value);
+  const horizonSteps = Math.max(1, Math.round(horizonUur / stepHours));
+  if(gridChargeMode) markGridChargeWindow(data, horizonSteps);
   const sim = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours, gridChargeMode===1);
 
   const scenarios = {
@@ -683,7 +722,7 @@ function recompute(){
   document.getElementById('dataNote').innerHTML =
     '<b>Let op:</b> exportprijs (kale inkoopprijs) = prijs \u00f7 (1 + btw) \u2212 energiebelasting \u2212 inkoopvergoeding. ' +
     (stratMode==='smart' ? 'De batterij reserveert lading voor de duurste ' + reservePct + '% van de uren per dag.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).') +
-    (gridChargeMode ? ' Slim laden staat aan: de batterij laadt ook vanaf het net bij tijdens de goedkoopste ' + gridChargePct + '% van de uren per dag, ook zonder zonneoverschot.' : '');
+    (gridChargeMode ? ' Slim laden staat aan: per moment wordt gekeken naar de eerstvolgende ' + horizonUur + ' uur — is er binnen dat venster al zon in zicht die het tekort dekt, dan laadt hij niet bij; is er wel een resterend tekort, dan laadt hij alleen bij op het goedkoopste (of negatieve) moment daarbinnen, en niet meer dan dat tekort vraagt.' : '');
 }
 
 // ---------------------------------------------------------------
@@ -711,7 +750,7 @@ bindRangeEuro('energiebelasting','energiebelastingVal',3);
 bindRangeEuro('inkoopvergoeding','inkoopvergoedingVal',3);
 bindRange('btw','btwVal','%',0);
 bindRange('reserve','reserveVal','%',0);
-bindRange('gridChargePct','gridChargePctVal','%',0);
+bindRange('horizon','horizonVal',' uur',0);
 
 document.getElementById('saldAan').addEventListener('click', ()=>{
   saldMode=1; document.getElementById('saldAan').classList.add('active'); document.getElementById('saldUit').classList.remove('active'); recompute();
@@ -730,11 +769,11 @@ document.getElementById('stratSmart').addEventListener('click', ()=>{
 
 document.getElementById('gridChargeUit').addEventListener('click', ()=>{
   gridChargeMode=0; document.getElementById('gridChargeUit').classList.add('active'); document.getElementById('gridChargeAan').classList.remove('active');
-  document.getElementById('gridChargePctField').style.opacity='0.4'; recompute();
+  document.getElementById('horizonField').style.opacity='0.4'; recompute();
 });
 document.getElementById('gridChargeAan').addEventListener('click', ()=>{
   gridChargeMode=1; document.getElementById('gridChargeAan').classList.add('active'); document.getElementById('gridChargeUit').classList.remove('active');
-  document.getElementById('gridChargePctField').style.opacity='1'; recompute();
+  document.getElementById('horizonField').style.opacity='1'; recompute();
 });
 
 function setResolutie(nieuw){
