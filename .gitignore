@@ -1,0 +1,38 @@
+# Besturingssysteem
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+
+# Node (voor de scripts in scripts/)
+node_modules/
+npm-debug.log*
+*.log
+
+# Lokale geheimen / instellingen
+.env
+.env.*
+
+# Claude Code: persoonlijke instellingen niet delen, skills wel
+.claude/*
+
+# Eigen meterdata nooit per ongeluk publiceren (de app werkt met uploads in de browser)
+meterdata/
+*homewizard*.csv
+*meter*.csv
+
+# Tijdelijke bestanden
+*.tmp
+*.bak
+tmp/
+
+# Echte P1-meterexports (HomeWizard e.d.)
+P1e-*.csv
+P1-*.csv

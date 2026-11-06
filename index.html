@@ -3,287 +3,522 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Batterij-besparing calculator</title>
+<title>Thuisbatterij calculator</title>
+<meta name="description" content="Bereken met je eigen meterdata en dynamische stroomprijzen hoeveel een thuisbatterij je bespaart.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='5' width='20' height='24' rx='4' fill='%232f8f4e'/%3E%3Crect x='12' y='2' width='8' height='4' rx='1.5' fill='%232f8f4e'/%3E%3Cpath d='M17.5 9l-6 9h4.5l-1.5 7 6-9h-4.5z' fill='white'/%3E%3C/svg%3E">
+<script>
+  // thema zo vroeg mogelijk zetten (voorkomt flitsen)
+  (function(){ try{ var t = localStorage.getItem('hb.theme'); if(t) document.documentElement.setAttribute('data-theme', t); }catch(e){} })();
+</script>
 <style>
   :root{
-    --bg:#0f1410;
-    --panel:#161d18;
-    --panel-2:#1c241e;
-    --line:#2a342c;
-    --text:#eef2ec;
-    --muted:#8ea18f;
-    --amber:#e8b04b;
-    --lime:#9fd856;
-    --red:#e8735f;
-    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
-    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --bg:#f5f6f2;
+    --surface:#ffffff;
+    --surface-2:#f0f2ec;
+    --line:#e2e6dc;
+    --line-strong:#cfd6c7;
+    --text:#18201a;
+    --muted:#5f6b61;
+    --faint:#8a948b;
+    --accent:#2f8f4e;
+    --accent-strong:#237541;
+    --accent-soft:#e3f1e6;
+    --amber:#b7791f;
+    --amber-soft:#fbf1dc;
+    --neg:#c2410c;
+    --neg-soft:#fde7dc;
+    --shadow:0 1px 2px rgba(24,32,26,.04), 0 4px 16px rgba(24,32,26,.05);
+    --radius:16px;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+    color-scheme: light;
   }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0f1311; --surface:#171c19; --surface-2:#1e2420; --line:#29312c; --line-strong:#37413a;
+      --text:#e9eee9; --muted:#9aa79d; --faint:#6f7b72;
+      --accent:#5cc27e; --accent-strong:#7bd496; --accent-soft:#1d3325;
+      --amber:#e3a94b; --amber-soft:#3a2f1a; --neg:#f08a62; --neg-soft:#3b2219;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1311; --surface:#171c19; --surface-2:#1e2420; --line:#29312c; --line-strong:#37413a;
+    --text:#e9eee9; --muted:#9aa79d; --faint:#6f7b72;
+    --accent:#5cc27e; --accent-strong:#7bd496; --accent-soft:#1d3325;
+    --amber:#e3a94b; --amber-soft:#3a2f1a; --neg:#f08a62; --neg-soft:#3b2219;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+
   *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
   body{
     margin:0; background:var(--bg); color:var(--text);
-    font-family:var(--sans); line-height:1.5;
+    font-family:var(--sans); font-size:15px; line-height:1.5;
+    transition:background .2s, color .2s;
   }
-  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px;}
-  header{margin-bottom:28px;}
-  .eyebrow{
-    font-family:var(--mono); font-size:12px; letter-spacing:.12em; text-transform:uppercase;
-    color:var(--lime); margin-bottom:8px;
-  }
-  h1{font-size:clamp(24px,4vw,34px); margin:0 0 8px; font-weight:700; letter-spacing:-0.01em;}
-  .sub{color:var(--muted); max-width:640px; font-size:14.5px;}
+  .num, .val, td, th{font-variant-numeric: tabular-nums;}
+  a{color:var(--accent);}
+  code{font-family:var(--mono); font-size:.92em;}
 
-  .grid{display:grid; grid-template-columns: 340px 1fr; gap:20px;}
-  @media (max-width: 880px){ .grid{grid-template-columns: 1fr;} }
-
-  .panel{
-    background:var(--panel); border:1px solid var(--line); border-radius:14px;
-    padding:20px;
+  /* ---------- top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:10;
+    background:color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter:saturate(1.4) blur(10px); -webkit-backdrop-filter:saturate(1.4) blur(10px);
+    border-bottom:1px solid var(--line);
   }
-  .panel + .panel{margin-top:20px;}
-  .panel h2{
-    font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted);
-    margin:0 0 16px; font-weight:600;
+  .topbar-inner{max-width:1200px; margin:0 auto; padding:12px 20px; display:flex; align-items:center; gap:12px;}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:-.01em;}
+  .brand-mark{
+    width:32px; height:32px; border-radius:9px; background:var(--accent); color:#fff;
+    display:grid; place-items:center;
+  }
+  .brand small{display:block; font-weight:500; color:var(--muted); font-size:12px; letter-spacing:0;}
+  .spacer{flex:1;}
+  .icon-btn{
+    border:1px solid var(--line); background:var(--surface); color:var(--text);
+    width:38px; height:38px; border-radius:10px; display:grid; place-items:center; cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .icon-btn:hover{border-color:var(--line-strong);}
+  .icon-btn svg{width:18px; height:18px;}
+  .icon-sun{display:none;}
+  :root[data-theme="dark"] .icon-sun{display:block;} :root[data-theme="dark"] .icon-moon{display:none;}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .icon-sun{display:block;}
+    :root:not([data-theme="light"]) .icon-moon{display:none;}
   }
 
-  .field{margin-bottom:18px;}
+  /* ---------- layout ---------- */
+  .wrap{max-width:1200px; margin:0 auto; padding:28px 20px 64px;}
+  .intro{margin:4px 0 26px; max-width:720px;}
+  .intro h1{font-size:clamp(26px,4vw,38px); line-height:1.15; margin:0 0 10px; letter-spacing:-.02em;}
+  .intro p{margin:0; color:var(--muted); font-size:16px;}
+  .grid{display:grid; grid-template-columns:minmax(0,400px) minmax(0,1fr); gap:24px; align-items:start;}
+  @media (max-width: 920px){ .grid{grid-template-columns:minmax(0,1fr);} }
+  .results-col{position:sticky; top:84px;}
+  @media (max-width: 920px){ .results-col{position:static;} }
+
+  /* ---------- cards ---------- */
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:22px;
+  }
+  .card + .card{margin-top:16px;}
+  .card-head{display:flex; align-items:center; gap:10px; margin-bottom:18px;}
+  .step{
+    width:26px; height:26px; border-radius:50%; background:var(--accent-soft); color:var(--accent-strong);
+    display:grid; place-items:center; font-weight:700; font-size:13px; flex:none;
+  }
+  .card-head h2{font-size:16px; margin:0; letter-spacing:-.01em;}
+
+  /* ---------- fields ---------- */
+  .field{margin-bottom:18px; transition:opacity .2s;}
   .field:last-child{margin-bottom:0;}
-  .field label{
-    display:flex; justify-content:space-between; align-items:baseline;
-    font-size:13px; color:var(--text); margin-bottom:6px;
+  .field.disabled{opacity:.45;}
+  .field > label:not(.drop), .field-label{
+    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:14px; font-weight:600; margin-bottom:8px;
   }
-  .field label .val{font-family:var(--mono); color:var(--amber); font-size:13px;}
-  input[type=range]{
-    width:100%; accent-color: var(--lime); height:4px;
-  }
-  select{
-    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
-    border-radius:8px; padding:8px 10px; font-family:var(--sans); font-size:13px;
-  }
-  input[type=number]{
-    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
-    border-radius:8px; padding:8px 10px; font-family:var(--mono); font-size:13px;
-  }
-  .hint{font-size:11.5px; color:var(--muted); margin-top:4px;}
+  .val{font-family:var(--mono); font-weight:600; font-size:13px; color:var(--accent-strong);
+       background:var(--accent-soft); padding:2px 8px; border-radius:6px; white-space:nowrap;}
+  .val:empty{display:none;}
+  .hint{font-size:13px; color:var(--muted); margin-top:6px; line-height:1.45;}
 
-  .toggle-row{display:flex; gap:8px;}
-  .toggle-btn{
-    flex:1; background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
-    padding:9px 8px; border-radius:8px; font-size:12.5px; cursor:pointer; text-align:center;
-    font-family:var(--sans); font-weight:600; transition:.15s;
+  select, input[type=number]{
+    width:100%; background:var(--surface); border:1px solid var(--line-strong); color:var(--text);
+    border-radius:10px; padding:10px 12px; font:inherit; font-size:14.5px;
+    transition:border-color .15s, box-shadow .15s;
   }
-  .toggle-btn.active{background:rgba(159,216,86,0.12); border-color:var(--lime); color:var(--lime);}
+  input[type=number]{font-family:var(--mono);}
+  select:focus, input[type=number]:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
 
-  .upload{
-    display:block; border:1px dashed var(--line); border-radius:10px; padding:14px; text-align:center;
-    font-size:12.5px; color:var(--muted); cursor:pointer; background:var(--panel-2);
-    margin-bottom:10px;
+  input[type=range]{width:100%; accent-color:var(--accent); margin:2px 0; cursor:pointer;}
+
+  .seg{display:flex; gap:4px; background:var(--surface-2); border:1px solid var(--line); padding:4px; border-radius:11px;}
+  .seg-btn{
+    flex:1; border:0; background:transparent; color:var(--muted); font:inherit; font-size:13.5px; font-weight:600;
+    padding:8px 10px; border-radius:8px; cursor:pointer; transition:background .15s, color .15s, box-shadow .15s;
   }
-  .upload.ok{border-color:var(--lime); color:var(--lime);}
-  .upload input{display:none;}
+  .seg-btn:hover{color:var(--text);}
+  .seg-btn.active{background:var(--surface); color:var(--text); box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .seg-btn:focus-visible, .icon-btn:focus-visible, .drop:focus-within{outline:2px solid var(--accent); outline-offset:2px;}
 
-  .status{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:10px;}
-  .status.err{color:var(--red);}
-
-  .hero-numbers{
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:20px;
+  /* ---------- dropzone ---------- */
+  .drop{
+    display:flex; align-items:center; gap:14px; cursor:pointer;
+    border:1.5px dashed var(--line-strong); border-radius:12px; padding:16px; background:var(--surface-2);
+    transition:border-color .15s, background .15s;
   }
-  .stat{
-    background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:16px;
+  .drop:hover, .drop.drag{border-color:var(--accent); background:var(--accent-soft);}
+  .drop input{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;}
+  .drop-icon{
+    width:40px; height:40px; border-radius:10px; background:var(--surface); border:1px solid var(--line);
+    display:grid; place-items:center; color:var(--accent); flex:none;
   }
-  .stat .label{font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:8px;}
-  .stat .num{font-family:var(--mono); font-size:26px; font-weight:700;}
-  .stat .num.pos{color:var(--lime);}
-  .stat .num.neg{color:var(--red);}
-  .stat .sup{font-size:11.5px; color:var(--muted); margin-top:4px;}
+  .drop-icon svg{width:20px; height:20px;}
+  .drop-text{font-size:14px; font-weight:600; line-height:1.35;}
+  .drop-text .hint{display:block; font-weight:400; margin-top:2px; word-break:break-word;}
+  .drop.ok{border-style:solid; border-color:var(--accent); background:var(--accent-soft);}
+  .drop.ok .drop-icon{background:var(--accent); color:#fff; border-color:var(--accent);}
 
-  table{width:100%; border-collapse:collapse; font-size:13px;}
-  th,td{text-align:right; padding:10px 8px; border-bottom:1px solid var(--line); font-family:var(--mono);}
-  th:first-child, td:first-child{text-align:left; font-family:var(--sans);}
-  th{color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;}
-  td.pos{color:var(--lime);} td.neg{color:var(--red);}
+  .status{font-size:13px; color:var(--muted); margin-top:14px; display:flex; gap:8px; align-items:flex-start;}
+  .status::before{content:""; width:8px; height:8px; border-radius:50%; background:var(--faint); margin-top:6px; flex:none;}
+  .status.err{color:var(--neg);} .status.err::before{background:var(--neg);}
+  .has-results .status::before{background:var(--accent);}
 
-  .barchart{margin-top:24px;}
-  .bars{display:flex; align-items:flex-end; gap:6px; height:150px; margin-top:12px;}
-  .bar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
-  .bar{width:100%; border-radius:4px 4px 0 0; background:var(--lime); min-height:2px;}
-  .bar.neg{background:var(--red);}
-  .bar-label{font-size:9.5px; color:var(--muted); margin-top:6px; font-family:var(--mono);}
+  details.adv{border-top:1px solid var(--line); margin-top:20px; padding-top:14px;}
+  details.adv summary{cursor:pointer; font-weight:600; font-size:14px; color:var(--muted); list-style:none; display:flex; align-items:center; gap:6px;}
+  details.adv summary::-webkit-details-marker{display:none;}
+  details.adv summary::before{content:"›"; display:inline-block; transition:transform .15s; font-size:18px; line-height:1;}
+  details.adv[open] summary::before{transform:rotate(90deg);}
+  details.adv[open] summary{margin-bottom:16px;}
 
-  .note{
-    font-size:12.5px; color:var(--muted); background:var(--panel-2); border:1px solid var(--line);
-    border-radius:10px; padding:12px 14px; margin-top:16px;
+  /* ---------- results ---------- */
+  .empty{
+    text-align:center; padding:44px 24px;
   }
+  .empty-icon{width:56px; height:56px; margin:0 auto 14px; border-radius:16px; background:var(--accent-soft); color:var(--accent); display:grid; place-items:center;}
+  .empty-icon svg{width:28px; height:28px;}
+  .empty h2{margin:0 0 6px; font-size:19px;}
+  .empty p{margin:0 auto; color:var(--muted); max-width:420px;}
+  .empty ol{display:inline-block; text-align:left; color:var(--muted); margin:16px 0 0; padding-left:20px; font-size:14px;}
+  .results{display:none;}
+  .has-results .results{display:block;}
+  .has-results .empty{display:none;}
+
+  .hero{
+    background:linear-gradient(135deg, var(--accent-soft), var(--surface) 70%);
+    border:1px solid var(--line); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow);
+  }
+  .hero-label{font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;}
+  .hero-big{font-size:clamp(38px,6vw,56px); font-weight:800; letter-spacing:-.03em; line-height:1.05; margin:6px 0 4px;}
+  .hero-big.pos{color:var(--accent-strong);} .hero-big.neg{color:var(--neg);}
+  .hero-sup{color:var(--muted); font-size:14px;}
+  .compare{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px;}
+  .compare > div{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px;}
+  .compare .lbl{font-size:12.5px; color:var(--muted);}
+  .compare .num{font-size:22px; font-weight:700; margin-top:2px; letter-spacing:-.01em;}
+  .payback{display:flex; align-items:center; gap:16px; margin-top:12px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px;}
+  .payback > div:first-child{flex:none; min-width:150px;}
+  .payback .lbl{font-size:12.5px; color:var(--muted);}
+  .payback .num{font-size:22px; font-weight:700; margin-top:2px; letter-spacing:-.01em;}
+  .payback .num.goed{color:var(--accent-strong);} .payback .num.matig{color:var(--amber);} .payback .num.slecht{color:var(--neg);}
+  .payback-text{font-size:13px; color:var(--muted); line-height:1.45;}
+  @media (max-width: 520px){ .payback{flex-direction:column; align-items:flex-start; gap:6px;} }
+  .period{font-size:13px; color:var(--muted); margin-top:14px;}
+
+  .advies-top{background:var(--accent-soft); border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius:12px; padding:14px 16px; font-size:14px; line-height:1.5; margin-bottom:14px;}
+  .advies-top b{color:var(--accent-strong);}
+  .advies-filter{margin-bottom:10px;}
+  table.advies td{font-size:13px;}
+  table.advies td:first-child{font-weight:500;}
+  table.advies td:first-child small{display:block; color:var(--faint); font-weight:400; font-size:12px;}
+  table.advies tr.best td{background:var(--accent-soft);}
+  table.advies tr.huidig td:first-child::after{content:" · gekozen"; color:var(--accent-strong); font-size:12px; font-weight:600;}
+  .kies-btn{border:1px solid var(--line-strong); background:var(--surface); color:var(--text); font:inherit; font-size:12.5px; font-weight:600; padding:5px 10px; border-radius:8px; cursor:pointer;}
+  .kies-btn:hover{border-color:var(--accent); color:var(--accent-strong);}
+  .toon-meer{margin-top:10px; border:0; background:none; color:var(--accent-strong); font:inherit; font-weight:600; font-size:13.5px; cursor:pointer; padding:4px 0;}
+  .period .warn{color:var(--amber);}
+
+  .section-title{font-size:15px; font-weight:700; margin:0 0 14px;}
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th, td{text-align:right; padding:11px 8px; border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:0;}
+  th:first-child, td:first-child{text-align:left; padding-left:0;}
+  th:last-child, td:last-child{padding-right:0;}
+  th{color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em;}
+  td{font-family:var(--mono); font-size:13.5px;}
+  td:first-child{font-family:var(--sans); font-weight:600; font-size:14px;}
+  td.pos{color:var(--accent-strong); font-weight:700;} td.neg{color:var(--neg); font-weight:700;}
+  .table-scroll{overflow-x:auto;}
+
+  .bars{display:flex; align-items:flex-end; gap:5px; height:170px; padding-top:10px;}
+  .bar-col{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+  .bar{width:100%; max-width:34px; border-radius:6px 6px 2px 2px; background:var(--accent); min-height:2px; transition:height .25s ease;}
+  .bar:hover{background:var(--accent-strong);}
+  .bar.neg{background:var(--neg);}
+  .bar-label{font-size:10.5px; color:var(--faint); margin-top:6px; font-family:var(--mono); white-space:nowrap;}
+
+  .note{font-size:13px; color:var(--muted); line-height:1.55;}
   .note b{color:var(--text);}
-  footer{margin-top:40px; font-size:11.5px; color:var(--muted); text-align:center;}
-  a{color:var(--lime);}
+
+  .disclaimer{margin-top:40px; padding:18px 20px; border:1px solid var(--line); border-radius:14px; background:var(--surface);
+    font-size:12.5px; color:var(--muted); line-height:1.55;}
+  .disclaimer h2{font-size:13.5px; margin:0 0 8px; color:var(--text);}
+  .disclaimer ul{margin:0; padding-left:18px;}
+  .disclaimer li{margin:3px 0;}
+  footer{margin-top:24px; font-size:13px; color:var(--faint); text-align:center;}
+  footer svg{width:14px; height:14px; vertical-align:-2px; margin-right:4px;}
+
+  @media (max-width: 520px){
+    .wrap{padding:20px 16px 48px;}
+    .card, .hero{padding:18px;}
+    .compare{grid-template-columns:1fr;}
+    .brand small{display:none;}
+    .bar-label{font-size:9px;}
+    .bars{gap:3px;}
+    .bar-col:nth-child(even) .bar-label{visibility:hidden;}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
 </style>
 </head>
 <body>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+      </div>
+      <div>Thuisbatterij calculator<small>met dynamische stroomprijzen</small></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="Wissel licht/donker thema" title="Licht / donker">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </div>
+</div>
+
 <div class="wrap">
-  <header>
-    <div class="eyebrow">Thuisbatterij // besparingsmodel</div>
-    <h1>Hoeveel bespaar ik met een thuisbatterij?</h1>
-    <div class="sub">Upload je kwartier-meterstanden en dynamische uurprijzen, stel je batterij in, en zie direct het effect — met en zonder saldering, naïef of prijs-bewust ontladen.</div>
-  </header>
+  <div class="intro">
+    <h1>Hoeveel bespaar jij met een thuisbatterij?</h1>
+    <p>Gebruik je eigen meterdata en de echte uurprijzen van je energieleverancier. Je ziet direct wat een batterij oplevert, met en zonder saldering.</p>
+  </div>
 
   <div class="grid">
-    <!-- SETTINGS -->
+    <!-- INSTELLINGEN -->
     <div>
-      <div class="panel">
-        <h2>Data</h2>
+      <section class="card">
+        <div class="card-head"><div class="step">1</div><h2>Jouw gegevens</h2></div>
 
         <div class="field">
-          <label>Resolutie</label>
-          <div class="toggle-row">
-            <div class="toggle-btn active" data-val="uur" id="resUur">Uur</div>
-            <div class="toggle-btn" data-val="kwartier" id="resKwartier">Kwartier</div>
-          </div>
-          <div class="hint">Kwartier vereist kwartierwaarden in je meter-CSV. Als je prijzen-CSV alleen uurprijzen bevat, wordt die prijs automatisch voor alle 4 kwartieren in dat uur gebruikt.</div>
+          <span class="field-label">Meterdata</span>
+          <label class="drop" id="uploadMeter">
+            <input type="file" id="fileMeter" accept=".csv">
+            <span class="drop-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+            </span>
+            <span class="drop-text" id="uploadMeterText">Kies of sleep je meter-CSV hierheen<span class="hint">Bijv. een HomeWizard-export (kwartier- of uurwaarden)</span></span>
+          </label>
         </div>
 
         <div class="field">
-          <label>Prijzen leverancier <span class="val" id="levVal"></span></label>
+          <label for="leverancierSelect">Energieleverancier <span class="val" id="levVal"></span></label>
           <select id="leverancierSelect">
-            <option value="">— kies leverancier —</option>
+            <option value="">Kies je leverancier…</option>
           </select>
-          <div class="hint">Prijzen-CSV wordt automatisch geladen uit <code>data/leveranciers/</code>.</div>
-        </div>
-
-        <label class="upload" id="uploadPrice">
-          <input type="file" id="filePrice" accept=".csv">
-          <span id="uploadPriceText">Of upload handmatig een prijzen-CSV<br><span class="hint">kolommen: datum, prijs</span></span>
-        </label>
-        <label class="upload" id="uploadMeter">
-          <input type="file" id="fileMeter" accept=".csv">
-          <span id="uploadMeterText">Meter-CSV (jouw eigen kwartierwaarden) uploaden<br><span class="hint">kolommen: time, Import/Export T1/T2 kWh</span></span>
-        </label>
-        <div class="status" id="status">Nog geen data geladen.</div>
-      </div>
-
-      <div class="panel">
-        <h2>Batterij</h2>
-        <div class="field">
-          <label>Capaciteit <span class="val" id="capVal">7.0 kWh</span></label>
-          <input type="range" id="cap" min="1" max="30" step="0.5" value="7">
+          <div class="hint" id="levInfo">Prijzen worden elke dag automatisch bijgewerkt, t/m morgen.</div>
         </div>
         <div class="field">
-          <label>Max laadvermogen <span class="val" id="chargeVal">3.5 kW</span></label>
-          <input type="range" id="charge" min="0.5" max="15" step="0.5" value="3.5">
-        </div>
-        <div class="field">
-          <label>Max ontlaadvermogen <span class="val" id="dischargeVal">3.5 kW</span></label>
-          <input type="range" id="discharge" min="0.5" max="15" step="0.5" value="3.5">
-        </div>
-        <div class="field">
-          <label>Round-trip efficiency (RTE) <span class="val" id="rteVal">90%</span></label>
-          <input type="range" id="rte" min="50" max="100" step="1" value="90">
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>Prijzen &amp; regeling</h2>
-        <div class="hint" style="margin-bottom:12px;">
-          De prijzen-CSV bevat de volledige kWh-prijs <b>mét salderen</b> (Inkoopprijs + Energiebelasting +
-          Inkoopvergoeding, plus Btw). Zonder salderen krijg je voor teruglevering alleen de kale inkoopprijs terug —
-          energiebelasting, inkoopvergoeding en btw gaan er dan vanaf.
-        </div>
-        <div class="field">
-          <label>Energiebelasting <span class="val" id="energiebelastingVal">€ 0,092</span> / kWh</label>
-          <input type="range" id="energiebelasting" min="0" max="0.2" step="0.001" value="0.092">
-        </div>
-        <div class="field">
-          <label>Inkoopvergoeding <span class="val" id="inkoopvergoedingVal">€ 0,017</span> / kWh</label>
-          <input type="range" id="inkoopvergoeding" min="0" max="0.1" step="0.001" value="0.017">
-        </div>
-        <div class="field">
-          <label>Btw <span class="val" id="btwVal">21%</span></label>
-          <input type="range" id="btw" min="0" max="25" step="1" value="21">
-        </div>
-        <div class="field">
-          <label>Saldering</label>
-          <div class="toggle-row">
-            <div class="toggle-btn active" data-val="1" id="saldAan">Met salderen</div>
-            <div class="toggle-btn" data-val="0" id="saldUit">Zonder salderen</div>
+          <span class="field-label">Rekenen met</span>
+          <div class="seg" role="group" aria-label="Tarieven">
+            <button type="button" class="seg-btn active" id="tariefHuidig">Huidige tarieven</button>
+            <button type="button" class="seg-btn" id="tariefHistorisch">Historische tarieven</button>
           </div>
-          <div class="hint">Beide worden altijd berekend — dit bepaalt alleen het hoofdresultaat.</div>
+          <div class="hint" id="tariefHint">De opslag die je leverancier nú rekent, over je hele meterperiode. Zo zie je wat je vanaf nu betaalt.</div>
+        </div>
+        <div class="field" id="eigenField" style="display:none">
+          <label for="eigenOpslag">Opslag van je leverancier <span class="val">€/kWh excl. btw</span></label>
+          <input type="number" id="eigenOpslag" min="-0.1" max="0.2" step="0.001" value="0.018">
+          <div class="hint">De vaste inkoopvergoeding bovenop de beursprijs. Energiebelasting en btw worden automatisch toegevoegd.</div>
+          <label for="eigenVast" style="margin-top:12px">Vaste leveringskosten stroom <span class="val">€/maand incl. btw</span></label>
+          <input type="number" id="eigenVast" min="0" max="50" step="0.01" value="6.99">
+        </div>
+
+        <div class="field">
+          <span class="field-label">Rekenen per</span>
+          <div class="seg" role="group" aria-label="Resolutie">
+            <button type="button" class="seg-btn active" id="resUur">Uur</button>
+            <button type="button" class="seg-btn" id="resKwartier">Kwartier</button>
+          </div>
+          <div class="hint">Kwartier is nauwkeuriger, maar vraagt kwartierwaarden in je meter-CSV.</div>
+        </div>
+
+        <div class="status" id="status" role="status" aria-live="polite">Prijzen laden…</div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><div class="step">2</div><h2>Batterij</h2></div>
+        <div class="field">
+          <label for="batterijSelect">Kies een thuisbatterij</label>
+          <select id="batterijSelect">
+            <option value="">Eigen instellingen</option>
+          </select>
+          <div class="hint" id="batterijInfo">Kies een model om de gegevens in te vullen, of stel hieronder zelf alles in.</div>
         </div>
         <div class="field">
-          <label>Strategie</label>
-          <div class="toggle-row">
-            <div class="toggle-btn" data-val="naive" id="stratNaive">Naïef</div>
-            <div class="toggle-btn active" data-val="smart" id="stratSmart">Prijs-bewust</div>
+          <label for="cap">Capaciteit (bruikbaar) <span class="val" id="capVal">7.0 kWh</span></label>
+          <input type="range" id="cap" min="1" max="60" step="0.01" value="7">
+        </div>
+        <div class="field">
+          <label for="charge">Max. laadvermogen <span class="val" id="chargeVal">3.5 kW</span></label>
+          <input type="range" id="charge" min="0.5" max="15" step="0.01" value="3.5">
+        </div>
+        <div class="field">
+          <label for="discharge">Max. ontlaadvermogen <span class="val" id="dischargeVal">3.5 kW</span></label>
+          <input type="range" id="discharge" min="0.5" max="15" step="0.01" value="3.5">
+        </div>
+        <div class="field">
+          <label for="rte">Rendement (round-trip) <span class="val" id="rteVal">90%</span></label>
+          <input type="range" id="rte" min="50" max="100" step="1" value="90">
+          <div class="hint">Hoeveel van de opgeslagen energie er weer uitkomt. Moderne batterijen halen 85–95%.</div>
+        </div>
+        <div class="field">
+          <label for="prijs">Aanschafprijs <span class="val">€ incl. installatie</span></label>
+          <input type="number" id="prijs" min="0" max="100000" step="10" placeholder="Bijv. je offerteprijs">
+          <div class="hint" id="prijsInfo">Vul je prijs in om de terugverdientijd te zien.</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><div class="step">3</div><h2>Strategie</h2></div>
+        <div class="field">
+          <span class="field-label">Saldering</span>
+          <div class="seg" role="group" aria-label="Saldering">
+            <button type="button" class="seg-btn" id="saldAan">Met salderen</button>
+            <button type="button" class="seg-btn active" id="saldUit">Zonder salderen</button>
+          </div>
+          <div class="hint">De salderingsregeling stopt per 1 januari 2027. Beide worden berekend; dit kiest het hoofdresultaat.</div>
+        </div>
+        <div class="field">
+          <span class="field-label">Ontladen</span>
+          <div class="seg" role="group" aria-label="Strategie">
+            <button type="button" class="seg-btn" id="stratNaive">Altijd</button>
+            <button type="button" class="seg-btn active" id="stratSmart">Prijs-bewust</button>
           </div>
         </div>
         <div class="field" id="reserveField">
-          <label>Winstmarge voor ontladen <span class="val" id="reserveVal">10%</span></label>
+          <label for="reserve">Minimale winstmarge <span class="val" id="reserveVal">10%</span></label>
           <input type="range" id="reserve" min="0" max="50" step="5" value="10">
-          <div class="hint">Batterij ontlaadt alleen als de huidige prijs minstens dit percentage boven de gemiddelde kostprijs van de opgeslagen energie ligt.</div>
+          <div class="hint">Ontlaad alleen als de stroomprijs minstens zoveel hoger is dan wat de opgeslagen energie kostte.</div>
         </div>
         <div class="field">
-          <label>Slim laden (vanaf net)</label>
-          <div class="toggle-row">
-            <div class="toggle-btn active" data-val="0" id="gridChargeUit">Uit</div>
-            <div class="toggle-btn" data-val="1" id="gridChargeAan">Aan</div>
+          <span class="field-label">Slim laden vanaf het net</span>
+          <div class="seg" role="group" aria-label="Slim laden">
+            <button type="button" class="seg-btn active" id="gridChargeUit">Uit</button>
+            <button type="button" class="seg-btn" id="gridChargeAan">Aan</button>
           </div>
-          <div class="hint">
-            Laadt de batterij alleen vanaf het net als de verwachte zon, binnen je vooruitkijkhorizon, hem
-            (uitgaande van een lege start) niet vol genoeg krijgt — en dan alleen op het goedkoopste (of negatieve)
-            moment binnen dat venster. Is er binnen de horizon genoeg zon om 'm helemaal vol te laden? Dan laadt
-            hij niet bij vanaf het net.
-          </div>
+          <div class="hint">Laadt bij op het goedkoopste moment als er de komende tijd te weinig zon wordt verwacht om de batterij te vullen.</div>
         </div>
-        <div class="field" id="horizonField" style="opacity:0.4">
-          <label>Vooruitkijkhorizon <span class="val" id="horizonVal">8 uur</span></label>
+        <div class="field disabled" id="horizonField">
+          <label for="horizon">Vooruitkijken <span class="val" id="horizonVal">8 uur</span></label>
           <input type="range" id="horizon" min="1" max="24" step="1" value="8">
-          <div class="hint">
-            Hoe ver je (weer/prijs)voorspelling in de praktijk vooruitkijkt. Het model beslist elk moment opnieuw,
-            op basis van alleen de data binnen dit venster — net als een echt HEMS dat elk uur zijn plan bijstelt
-            naarmate nieuwe forecast-data binnenkomt.
-          </div>
+          <div class="hint">Hoe ver een slimme sturing (HEMS) in de praktijk vooruit kan kijken in prijzen en weersverwachting.</div>
         </div>
-      </div>
+
+        <details class="adv">
+          <summary>Geavanceerd: extra terugleverkosten</summary>
+          <div class="field">
+            <label for="terugleverkosten">Extra terugleverkosten per kWh <span class="val" id="terugleverkostenVal">€ 0,000</span></label>
+            <input type="range" id="terugleverkosten" min="0" max="0.05" step="0.001" value="0">
+            <div class="hint">De terugleveringsvoorwaarden van je leverancier (bonus of verkoopvergoeding) zitten al in de berekening. Gebruik dit alleen als je leverancier daarbovenop nog iets per kWh inhoudt.</div>
+          </div>
+        </details>
+      </section>
     </div>
 
-    <!-- RESULTS -->
-    <div>
-      <div class="panel">
-        <h2>Hoofdresultaat</h2>
-        <div class="hero-numbers">
-          <div class="stat">
-            <div class="label">Zonder batterij</div>
-            <div class="num" id="heroBefore">—</div>
-          </div>
-          <div class="stat">
-            <div class="label">Met batterij</div>
-            <div class="num" id="heroAfter">—</div>
-          </div>
-          <div class="stat">
-            <div class="label">Besparing / jaar</div>
-            <div class="num" id="heroSavings">—</div>
-          </div>
+    <!-- RESULTATEN -->
+    <div class="results-col">
+      <section class="card empty">
+        <div class="empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="12" height="16" rx="2"/><path d="M10 2h4"/><path d="M12.5 9 10 13h4l-2.5 4"/></svg>
         </div>
+        <h2>Nog geen berekening</h2>
+        <p>Je resultaat verschijnt hier zodra deze twee dingen klaar zijn:</p>
+        <ol>
+          <li>Upload je meter-CSV</li>
+          <li>Kies je energieleverancier</li>
+        </ol>
+      </section>
 
-        <table>
-          <thead>
-            <tr><th>Scenario</th><th>Zonder batterij</th><th>Met batterij</th><th>Besparing</th></tr>
-          </thead>
-          <tbody id="scenarioTable">
-            <tr><td colspan="4" style="text-align:center;color:var(--muted);">Upload je CSV's om te beginnen</td></tr>
-          </tbody>
-        </table>
+      <div class="results">
+        <section class="hero">
+          <div class="hero-label">Besparing per jaar</div>
+          <div class="hero-big" id="heroSavings">—</div>
+          <div class="hero-sup" id="heroSavingsSup"></div>
+          <div class="compare">
+            <div><div class="lbl">Zonder batterij</div><div class="num" id="heroBefore">—</div></div>
+            <div><div class="lbl">Met batterij</div><div class="num" id="heroAfter">—</div></div>
+          </div>
+          <div class="payback" id="paybackBox">
+            <div><div class="lbl">Terugverdientijd</div><div class="num" id="heroPayback">—</div></div>
+            <div class="payback-text" id="paybackNote">Vul bij de batterij een aanschafprijs in.</div>
+          </div>
+          <div class="period" id="netNote"></div>
+          <div class="period" id="periodNote"></div>
+        </section>
 
-        <div class="barchart">
-          <h2 style="margin-top:0;">Besparing per maand (hoofdresultaat)</h2>
+        <section class="card" id="adviesCard">
+          <h3 class="section-title">Welke batterij past het best bij jou?</h3>
+          <div class="advies-top" id="adviesTop">Bezig met vergelijken…</div>
+          <div class="seg advies-filter" role="group" aria-label="Soort batterij">
+            <button type="button" class="seg-btn active" id="adviesAlles">Alle</button>
+            <button type="button" class="seg-btn" id="adviesStekker">Stekker</button>
+            <button type="button" class="seg-btn" id="adviesVast">Vaste installatie</button>
+          </div>
+          <div class="table-scroll">
+            <table class="advies">
+              <thead><tr><th>Batterij</th><th>Bespaart / jaar</th><th>Prijs</th><th>Terug&shy;verdiend</th><th></th></tr></thead>
+              <tbody id="adviesTabel"></tbody>
+            </table>
+          </div>
+          <div class="hint" id="adviesNote"></div>
+        </section>
+
+        <section class="card" id="levAdviesCard">
+          <h3 class="section-title">Welke energieleverancier is het goedkoopst voor jou?</h3>
+          <div class="advies-top" id="levAdviesTop">Bezig met vergelijken…</div>
+          <div class="table-scroll">
+            <table class="advies">
+              <thead><tr><th>Leverancier</th><th>Zonder batterij</th><th>Met batterij</th><th>Verschil</th><th></th></tr></thead>
+              <tbody id="levAdviesTabel"></tbody>
+            </table>
+          </div>
+          <div class="hint" id="levAdviesNote"></div>
+        </section>
+
+        <section class="card">
+          <h3 class="section-title">Besparing per maand</h3>
           <div class="bars" id="bars"></div>
-        </div>
-      </div>
+        </section>
 
-      <div class="note" id="dataNote" style="display:none;"></div>
+        <section class="card">
+          <h3 class="section-title">Beide scenario's (totaal over de periode)</h3>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Scenario</th><th>Zonder</th><th>Met</th><th>Besparing</th></tr></thead>
+              <tbody id="scenarioTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="note" id="dataNote"></div>
+          <div class="note" style="margin-top:10px">Dit is een indicatie, geen advies: lees de <a href="#disclaimer">disclaimer</a> onderaan.</div>
+        </section>
+      </div>
     </div>
   </div>
 
+  <section class="disclaimer" id="disclaimer" aria-labelledby="disclaimerTitel">
+    <h2 id="disclaimerTitel">Disclaimer</h2>
+    <ul>
+      <li><b>Alleen een indicatie.</b> De uitkomsten zijn een schatting op basis van je eigen meterdata uit het verleden. Het is geen financieel advies of aankoopadvies, en er kunnen geen rechten aan worden ontleend. Toekomstige prijzen, je verbruik en het weer zullen anders zijn.</li>
+      <li><b>Tarieven kunnen veranderd zijn.</b> Opslagen, vaste kosten, terugleveringsvoorwaarden, energiebelasting en batterijprijzen komen uit openbare bronnen (laatst gecontroleerd: <span id="disclaimerDatum">onbekend</span>). Controleer ze altijd bij de leverancier of winkel voordat je iets afsluit of koopt. Leveranciers met een * hebben onbekende terugleveringsvoorwaarden; daar is alleen de beursprijs gebruikt.</li>
+      <li><b>Niet meegerekend:</b> netbeheerkosten, de belastingvermindering, welkomstkortingen, installatiekosten, subsidies, het stand-byverbruik en de slijtage van de batterij, en extra inkomsten uit handel of onbalans (zoals Powerplay). Ook terugleveren uit de batterij naar het net zit er niet in.</li>
+      <li><b>Vereenvoudigd model.</b> De batterijsturing is een benadering van een echt thuisbatterijsysteem en de specificaties zijn soms geschat. Een echt systeem kan meer of minder opleveren.</li>
+      <li><b>Salderen.</b> De salderingsregeling stopt op 1 januari 2027. Kies "zonder salderen" voor wat je daarna kunt verwachten.</li>
+      <li>Deze app is onafhankelijk en heeft geen band met de genoemde leveranciers of fabrikanten. Merk- en productnamen staan er alleen om ze te herkennen.</li>
+    </ul>
+  </section>
+
   <footer>
-    Statische, client-side calculator — er wordt niets naar een server verstuurd. Alle berekening gebeurt in je browser.
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    Alles wordt in je browser berekend. Je meterdata verlaat je computer niet.
   </footer>
 </div>
 
@@ -295,7 +530,7 @@ let meterRows = null;   // [{hourKey, importKwh, exportKwh}]
 let priceRows = null;   // Map hourKey -> price
 let saldMode = 0;       // 1 = met salderen, 0 = zonder
 let stratMode = 'smart';
-let gridChargeMode = 1; // 0 = uit, 1 = aan
+let gridChargeMode = 0; // 0 = uit, 1 = aan (moet overeenkomen met de actieve knop in de HTML)
 let resMode = 'uur';    // 'uur' of 'kwartier'
 let meterRawText = null, meterRawName = null;
 let priceRawText = null, priceRawName = null;
@@ -347,22 +582,31 @@ function loadMeterCSV(text, res){
   if(mist.length > 0){
     throw new Error('dit lijkt geen meter-CSV te zijn (verwachte kolommen ontbreken: ' + mist.join(', ') + '). Is dit misschien een prijzen-CSV? Upload die dan via de "Prijzen-CSV" knop.');
   }
-  raw.sort((a,b)=> a.time < b.time ? -1 : 1);
-  // cumulatieve kolommen -> verschil per interval -> optellen per bucket (uur of kwartier)
+  // Meterexports staan al op tijdsvolgorde. Alleen sorteren als dat niet zo is: bij de overgang naar
+  // wintertijd komt 02:00–02:59 twee keer voor, en sorteren op tekst zou die twee uren door elkaar
+  // husselen (dan worden verschillen tussen standen negatief → spookverbruik).
+  const wintertijdHerhaling = (vorige, huidige) =>
+    vorige.slice(0,10) === huidige.slice(0,10) && vorige.slice(11,13) === '02' && huidige.slice(11,13) === '02';
+  const opVolgorde = raw.every((r,i)=> i === 0 || r.time >= raw[i-1].time || wintertijdHerhaling(raw[i-1].time, r.time));
+  if(!opVolgorde) raw.sort((a,b)=> a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+  // cumulatieve kolommen -> verschil per interval -> optellen per bucket (uur of kwartier).
+  // De stand op een rij is de stand aan het BEGIN van dat kwartier (HomeWizard: de "max W" van rij k
+  // hoort bij stand(k+1) − stand(k)). Het verschil tot de volgende rij hoort dus bij de tijd van de vorige rij.
   const buckets = new Map();
-  let prevImp = null, prevExp = null;
+  let prevImp = null, prevExp = null, prevTime = null;
   for(const r of raw){
     const imp = parseFloat(r['Import T1 kWh']) + parseFloat(r['Import T2 kWh']);
     const exp = parseFloat(r['Export T1 kWh']) + parseFloat(r['Export T2 kWh']);
+    if(Number.isNaN(imp) || Number.isNaN(exp)) continue; // lege/kapotte rij: sla over, verschil loopt door
     if(prevImp !== null){
       const di = Math.max(0, imp - prevImp);
       const de = Math.max(0, exp - prevExp);
-      const key = bucketKeyFromMeterTime(r.time, res);
+      const key = bucketKeyFromMeterTime(prevTime, res);
       if(!buckets.has(key)) buckets.set(key, {importKwh:0, exportKwh:0});
       const b = buckets.get(key);
       b.importKwh += di; b.exportKwh += de;
     }
-    prevImp = imp; prevExp = exp;
+    prevImp = imp; prevExp = exp; prevTime = r.time;
   }
   const out = [];
   for(const [key, v] of buckets) out.push({hourKey:key, importKwh:v.importKwh, exportKwh:v.exportKwh});
@@ -395,36 +639,50 @@ function loadPriceCSV(text, res){
 // ---------------------------------------------------------------
 // FILE UPLOAD HANDLERS
 // ---------------------------------------------------------------
-document.getElementById('fileMeter').addEventListener('change', e=>{
-  const f = e.target.files[0]; if(!f) return;
+function leesMeterBestand(f){
+  if(!f) return;
   const reader = new FileReader();
   reader.onload = ()=>{
     meterRawText = reader.result; meterRawName = f.name;
     try{
       meterRows = loadMeterCSV(meterRawText, resMode);
       document.getElementById('uploadMeter').classList.add('ok');
-      document.getElementById('uploadMeterText').innerHTML = f.name + '<br><span class="hint">' + meterRows.length + ' ' + (resMode==='kwartier'?'kwartieren':'uren') + ' geladen</span>';
+      document.getElementById('uploadMeterText').innerHTML = f.name + '<span class="hint">' + meterRows.length + ' ' + (resMode==='kwartier'?'kwartieren':'uren') + ' geladen</span>';
       recompute();
     }catch(err){ setStatus('Fout bij lezen meter-CSV: '+err.message, true); }
   };
   reader.readAsText(f);
+}
+document.getElementById('fileMeter').addEventListener('change', e=> leesMeterBestand(e.target.files[0]));
+(function(){
+  const drop = document.getElementById('uploadMeter');
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', e=> leesMeterBestand(e.dataTransfer.files[0]));
+  // voorkom dat de browser een losgelaten bestand naast de dropzone opent
+  window.addEventListener('dragover', e=> e.preventDefault());
+  window.addEventListener('drop', e=> e.preventDefault());
+})();
+
+// ---------------------------------------------------------------
+// THEMA (licht/donker) — volgt het systeem tot je zelf kiest
+// ---------------------------------------------------------------
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const root = document.documentElement;
+  const huidig = root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const nieuw = huidig === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', nieuw);
+  try{ localStorage.setItem('hb.theme', nieuw); }catch(e){}
 });
 
-document.getElementById('filePrice').addEventListener('change', e=>{
-  const f = e.target.files[0]; if(!f) return;
-  const reader = new FileReader();
-  reader.onload = ()=>{
-    priceRawText = reader.result; priceRawName = f.name;
-    try{
-      priceRows = loadPriceCSV(priceRawText, resMode);
-      document.getElementById('uploadPrice').classList.add('ok');
-      document.getElementById('uploadPriceText').innerHTML = f.name + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
-      document.getElementById('levVal').textContent = '';
-      recompute();
-    }catch(err){ setStatus('Fout bij lezen prijzen-CSV: '+err.message, true); }
-  };
-  reader.readAsText(f);
-});
+// "32.000 uurprijzen, 23-10-2022 t/m 07-11-2026"
+function priceSummary(){
+  if(!priceRows || priceRows.size === 0) return 'geen prijzen';
+  let min = null, max = null;
+  for(const k of priceRows.keys()){ if(min===null || k<min) min=k; if(max===null || k>max) max=k; }
+  const d = k => { const [y,m,dd] = k.slice(0,10).split('-'); return dd + '-' + m + '-' + y; };
+  return priceRows.size.toLocaleString('nl-NL') + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ', ' + d(min) + ' t/m ' + d(max);
+}
 
 function setStatus(msg, isErr){
   const el = document.getElementById('status');
@@ -433,87 +691,243 @@ function setStatus(msg, isErr){
 }
 
 // ---------------------------------------------------------------
-// LEVERANCIERS (mapje data/leveranciers/ met PRIJZEN-CSV's —
-// wordt automatisch uitgelezen via de GitHub API, geen manifest nodig)
+// LEVERANCIERS
+// Eén bestand met kale beursprijzen (data/epex.csv, dagelijks automatisch
+// bijgewerkt) + per leverancier de vaste opslag (data/leveranciers.json).
+// prijs = (kale prijs + vast) × (1 + btw)
 // ---------------------------------------------------------------
-const GITHUB_OWNER = 'RVDFeen';
-const GITHUB_REPO = 'Homebattery';
-const GITHUB_BRANCH = 'main';
-const LEVERANCIERS_PATH = 'data/leveranciers';
-
-function niceName(filename){
-  return filename.replace(/\.csv$/i,'').replace(/[-_]+/g,' ').replace(/\b\w/g, c=>c.toUpperCase());
-}
-
-async function loadLeveranciersManifest(){
-  const select = document.getElementById('leverancierSelect');
-  try{
-    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${LEVERANCIERS_PATH}?ref=${GITHUB_BRANCH}`;
-    const r = await fetch(url);
-    if(!r.ok) throw new Error('kon mapinhoud niet ophalen (status ' + r.status + ')');
-    const items = await r.json();
-    const csvFiles = items.filter(it => it.type === 'file' && it.name.toLowerCase().endsWith('.csv'));
-    for(const f of csvFiles){
-      const opt = document.createElement('option');
-      opt.value = f.download_url;
-      opt.textContent = niceName(f.name);
-      select.appendChild(opt);
-    }
-    if(csvFiles.length === 0){
-      setStatus('Nog geen CSV-bestanden gevonden in ' + LEVERANCIERS_PATH + '/.');
-    }
-  }catch(e){
-    setStatus('Kon leverancierslijst niet ophalen (' + e.message + '). Upload handmatig een prijzen-CSV.', true);
-  }
-}
+const DATA_BASES = ['', 'https://raw.githubusercontent.com/RVDFeen/Homebattery/main/']; // lokaal/Pages, anders GitHub
+const EIGEN = '__eigen__';
+let epexRows = null;   // [{datum, prijs}]
+let epexTekstCache = null; // ruwe inhoud van epex.csv (om bij resolutiewissel opnieuw te bucketen)
+let kalePrijzen = null;    // Map bucket -> kale beursprijs (excl. btw) = terugleverprijs zonder salderen
+let levConfig = null;  // inhoud van leveranciers.json
+let gekozenLev = null; // naam, EIGEN of null
 
 function wacht(ms){ return new Promise(res=>setTimeout(res, ms)); }
 
-async function fetchMetRetry(url, pogingen){
+async function fetchMetRetry(pad, pogingen){
   let laatsteFout = null;
-  for(let i=0; i<pogingen; i++){
-    try{
-      // cache-buster: voorkomt dat een eerdere lege/foute response uit de
-      // browsercache wordt hergebruikt bij grote bestanden
-      const sep = url.includes('?') ? '&' : '?';
-      const r = await fetch(url + sep + '_=' + Date.now(), {cache:'no-store'});
-      if(!r.ok) throw new Error('bestand niet gevonden (status ' + r.status + ')');
-      const tekst = await r.text();
-      if(!tekst || tekst.trim().length === 0) throw new Error('opgehaald bestand kwam leeg terug');
-      return tekst;
-    }catch(e){
-      laatsteFout = e;
-      if(i < pogingen-1) await wacht(600 * (i+1)); // korte, oplopende pauze
+  for(const base of DATA_BASES){
+    for(let i=0; i<pogingen; i++){
+      try{
+        const r = await fetch(base + pad + '?_=' + Date.now(), {cache:'no-store'});
+        if(!r.ok) throw new Error(pad + ' niet gevonden (status ' + r.status + ')');
+        const tekst = await r.text();
+        if(!tekst || tekst.trim().length === 0) throw new Error(pad + ' kwam leeg terug');
+        return tekst;
+      }catch(e){
+        laatsteFout = e;
+        if(i < pogingen-1) await wacht(600 * (i+1));
+      }
     }
   }
   throw laatsteFout;
 }
 
-async function loadLeverancierPrijzenCSV(url, naam){
+// vaste opslag (excl. btw, incl. energiebelasting) voor een datum "YYYY-MM-DD..."
+function vastOp(perioden, datum){
+  const eb = levConfig.energiebelasting;
+  const dag = datum.slice(0,10), jaar = datum.slice(0,4);
+  let i = -1;
+  for(let j=0; j<perioden.length; j++){ if(perioden[j].vanaf <= dag) i = j; else break; }
+  const p = perioden[Math.max(0,i)];
+  // Eerste periode terug in de tijd, of laatste periode in een nieuw jaar:
+  // corrigeer voor de verandering in energiebelasting (als beide jaren bekend zijn).
+  const buiten = i === -1 || (i === perioden.length-1 && jaar > p.vanaf.slice(0,4));
+  const pj = p.vanaf.slice(0,4);
+  if(buiten && jaar !== pj){
+    const ebT = eb[jaar] ?? eb[Object.keys(eb).sort().filter(j=>j<=jaar).pop()];
+    if(ebT !== undefined && eb[pj] !== undefined) return p.vast + ebT - eb[pj];
+  }
+  return p.vast;
+}
+
+// 'huidig': alleen de laatste (= huidige) opslag, over de hele periode; de energiebelasting van elk
+// jaar schuift mee via vastOp. 'historisch': de opslag die op dat moment echt gold.
+let tariefModus = 'huidig';
+try{ if(localStorage.getItem('hb.tarief') === 'historisch') tariefModus = 'historisch'; }catch(e){}
+function periodenVoor(naam){
+  const alle = levConfig.leveranciers[naam];
+  return tariefModus === 'huidig' ? [alle[alle.length - 1]] : alle;
+}
+// Vaste leveringskosten stroom per maand (incl. btw). Onbekend → mediaan van de bekende leveranciers.
+function bekendeVasteKosten(naam){
+  const v = levConfig && levConfig.vasteKosten && levConfig.vasteKosten[naam];
+  return v && typeof v.perMaand === 'number' ? v.perMaand : null;
+}
+function mediaanVasteKosten(){
+  const w = Object.keys((levConfig && levConfig.leveranciers) || {}).map(bekendeVasteKosten).filter(x => x !== null).sort((a,b)=> a-b);
+  if(!w.length) return 0;
+  const m = w.length >> 1;
+  return w.length % 2 ? w[m] : (w[m-1] + w[m]) / 2;
+}
+function vasteKostenMaand(naam){
+  if(!naam) return 0;
+  if(naam === EIGEN) return Math.max(0, parseFloat(document.getElementById('eigenVast').value) || 0);
+  const v = bekendeVasteKosten(naam);
+  return v !== null ? v : mediaanVasteKosten();
+}
+const vasteKostenGeschat = naam => !!naam && naam !== EIGEN && bekendeVasteKosten(naam) === null;
+
+// Terugleveringsvoorwaarden (dynamisch) per leverancier, per kWh excl. btw bovenop de kale marktprijs.
+// binnen = binnen de saldering (+ energiebelasting + btw), buiten = overschot / zonder salderen (geen btw).
+// Onbekend → alleen de marktprijs. Eigen opslag → binnen de saldering de volle afnameprijs.
+function terugVoor(naam){
+  if(naam === EIGEN) return { binnen: Math.max(0, parseFloat(document.getElementById('eigenOpslag').value) || 0) / (1 + levConfig.btw), buiten: 0, bonusPct: 0, bekend: true };
+  const t = levConfig && levConfig.teruglevering && levConfig.teruglevering[naam];
+  if(!t) return { binnen: 0, buiten: 0, bonusPct: 0, bekend: false };
+  return { binnen: t.binnen ?? 0, buiten: t.buiten ?? 0, bonusPct: t.bonusPct || 0, bonusUren: t.bonusUren || null, bekend: true };
+}
+function ebVoor(jaar){
+  const eb = levConfig.energiebelasting;
+  return eb[jaar] ?? eb[Object.keys(eb).sort().filter(j => j <= jaar).pop()] ?? 0;
+}
+// Prijs per teruggeleverde kWh in een bepaald uur: { exportPrice (buiten saldering), salderPrice (binnen) }.
+// extraKosten = de schuif "extra terugleverkosten" (per kWh, gaat er bij beide af).
+function terugPrijzen(t, kaal, hourKey, extraKosten){
+  const uur = +hourKey.slice(11,13);
+  const bonusMag = t.bonusPct > 0 && (!t.bonusUren || (uur >= t.bonusUren[0] && uur < t.bonusUren[1]));
+  const bonus = (extra) => bonusMag && kaal + extra > 0 ? kaal * t.bonusPct / 100 : 0;
+  return {
+    exportPrice: kaal + t.buiten + bonus(t.buiten) - extraKosten,
+    salderPrice: (kaal + t.binnen + ebVoor(hourKey.slice(0,4))) * (1 + levConfig.btw) + bonus(t.binnen) - extraKosten,
+  };
+}
+
+function terugTekst(naam){
+  const t = terugVoor(naam);
+  const ct = v => (v >= 0 ? '+' : '−') + (Math.abs(v) * 100).toFixed(2).replace('.', ',') + ' ct';
+  if(naam === EIGEN) return 'binnen de saldering de volle afnameprijs, daarbuiten de kale beursprijs';
+  if(!t.bekend) return 'de kale beursprijs (voorwaarden van ' + naam + ' onbekend)';
+  const bonus = t.bonusPct ? ' + ' + t.bonusPct + '% bonus' + (t.bonusUren ? ' (' + t.bonusUren[0] + '–' + t.bonusUren[1] + ' uur)' : '') + ' bij positieve prijs' : '';
+  return 'beursprijs ' + ct(t.binnen) + bonus + ' binnen de saldering (plus energiebelasting en btw), beursprijs ' + ct(t.buiten) + bonus + ' daarbuiten (excl. btw)';
+}
+
+// Hoeveel scheelt 'historisch' t.o.v. 'huidig' op de afname in de meterperiode? (incl. btw, zonder batterij)
+// null = niet te bepalen. Alleen een verschil in opslag telt; de energiebelasting schuift in beide standen mee.
+function tariefVerschil(naam){
+  if(!naam || naam === EIGEN || !levConfig || !levConfig.leveranciers[naam] || !meterRows || !meterRows.length) return null;
+  const alle = levConfig.leveranciers[naam], laatste = [alle[alle.length - 1]];
+  const perDag = new Map();
+  for(const r of meterRows){ const dag = r.hourKey.slice(0,10); perDag.set(dag, (perDag.get(dag) || 0) + r.importKwh); }
+  let som = 0;
+  for(const [dag, kwh] of perDag) som += kwh * (vastOp(alle, dag) - vastOp(laatste, dag));
+  return som * (1 + levConfig.btw);
+}
+function zetTariefHint(){
+  let t = tariefModus === 'huidig'
+    ? 'De opslag die je leverancier nú rekent, over je hele meterperiode. Zo zie je wat je vanaf nu betaalt.'
+    : 'De opslag die je leverancier in die periode echt rekende: wat je toen werkelijk had betaald.';
+  const v = tariefVerschil(gekozenLev);
+  if(v !== null){
+    t += Math.abs(v) < 0.5
+      ? ' Bij ' + gekozenLev + ' is de opslag in je meterperiode niet veranderd (alleen de energiebelasting), dus beide standen geven hetzelfde.'
+      : ' Bij ' + gekozenLev + ' was het in je meterperiode ' + fmtEuro(Math.abs(v)) + ' ' + (v > 0 ? 'duurder' : 'goedkoper') + ' dan nu.';
+  }
+  document.getElementById('tariefHint').textContent = t;
+}
+
+function zetTariefModus(modus){
+  tariefModus = modus;
+  document.getElementById('tariefHuidig').classList.toggle('active', modus === 'huidig');
+  document.getElementById('tariefHistorisch').classList.toggle('active', modus === 'historisch');
+  zetTariefHint();
+  try{ localStorage.setItem('hb.tarief', modus); }catch(e){}
+  if(gekozenLev) kiesLeverancier(gekozenLev); else recompute();
+}
+
+function maakPrijzenTekst(naam){
+  const btwF = 1 + levConfig.btw;
+  let perioden;
+  if(naam === EIGEN){
+    // eigen opslag + de energiebelasting van elk jaar (uit leveranciers.json)
+    const opslag = parseFloat(document.getElementById('eigenOpslag').value) || 0;
+    perioden = Object.keys(levConfig.energiebelasting).sort()
+      .map(j => ({vanaf: j + '-01-01', vast: opslag + levConfig.energiebelasting[j]}));
+  } else {
+    perioden = periodenVoor(naam);
+  }
+  const regels = ['datum,prijs'];
+  for(const r of epexRows){
+    const vast = vastOp(perioden, r.datum);
+    regels.push(r.datum + ',' + ((r.prijs + vast) * btwF).toFixed(6));
+  }
+  return regels.join('\n');
+}
+
+function kiesLeverancier(naam){
+  gekozenLev = naam;
+  document.getElementById('eigenField').style.display = naam === EIGEN ? 'block' : 'none';
+  if(!naam || !epexRows || !levConfig) return;
+  const label = naam === EIGEN ? 'Eigen opslag' : naam;
+  priceRawText = maakPrijzenTekst(naam); priceRawName = label;
+  priceRows = loadPriceCSV(priceRawText, resMode);
+  let info = priceSummary();
+  if(naam !== EIGEN && tariefModus === 'huidig'){
+    const nu = levConfig.leveranciers[naam].at(-1), eb = levConfig.energiebelasting[nu.vanaf.slice(0,4)];
+    if(eb !== undefined) info += ' · huidige opslag ' + fmtEuro((nu.vast - eb) * (1 + levConfig.btw)).replace('€', '€ ') + '/kWh';
+    info += ' · ' + fmtEuro(vasteKostenMaand(naam)).replace('€', '€ ') + ' per maand vast' + (vasteKostenGeschat(naam) ? ' (geschat)' : '');
+    info += ' · teruglevering: ' + terugTekst(naam);
+  } else if(naam !== EIGEN){
+    const eerste = levConfig.leveranciers[naam][0].vanaf;
+    const [y,m,d] = eerste.split('-');
+    if(eerste > epexRows[0].datum.slice(0,10)) info += ' · vóór ' + d + '-' + m + '-' + y + ' geschat';
+  }
+  document.getElementById('levInfo').textContent = info;
+  document.getElementById('levVal').textContent = label;
+  try{ localStorage.setItem('hb.leverancier', naam); }catch(e){}
+  recompute();
+}
+
+async function laadLeveranciers(){
+  const select = document.getElementById('leverancierSelect');
   try{
-    setStatus('Bezig met laden van ' + naam + '...');
-    priceRawText = await fetchMetRetry(url, 3); priceRawName = naam;
-    priceRows = loadPriceCSV(priceRawText, resMode);
-    document.getElementById('uploadPrice').classList.add('ok');
-    document.getElementById('uploadPriceText').innerHTML = naam + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
-    document.getElementById('levVal').textContent = naam;
-    recompute();
+    setStatus('Prijzen laden...');
+    const [cfgTekst, epexTekst] = await Promise.all([
+      fetchMetRetry('data/leveranciers.json', 2),
+      fetchMetRetry('data/epex.csv', 2),
+    ]);
+    levConfig = JSON.parse(cfgTekst);
+    if(levConfig.laatstGecontroleerd){ const [y,m,d] = levConfig.laatstGecontroleerd.split('-'); document.getElementById('disclaimerDatum').textContent = d + '-' + m + '-' + y; }
+    epexRows = parseCSV(epexTekst).map(r => ({datum:r.datum, prijs:parseFloat(r.prijs)})).filter(r => !Number.isNaN(r.prijs));
+    epexTekstCache = epexTekst;
+    kalePrijzen = loadPriceCSV(epexTekst, resMode);
+    const namen = Object.keys(levConfig.leveranciers).sort((a,b)=> a.localeCompare(b, 'nl', {sensitivity:'base'}));
+    for(const n of [...namen, EIGEN]){
+      const opt = document.createElement('option');
+      opt.value = n;
+      opt.textContent = n === EIGEN ? 'Andere leverancier (eigen opslag)…' : n;
+      select.appendChild(opt);
+    }
+    setStatus('Kies een leverancier en upload je meter-CSV.');
+    let vorige = null;
+    try{ vorige = localStorage.getItem('hb.leverancier'); }catch(e){}
+    if(vorige && (vorige === EIGEN || levConfig.leveranciers[vorige])){ select.value = vorige; kiesLeverancier(vorige); }
   }catch(e){
-    setStatus('Fout bij laden van ' + naam + ' (na meerdere pogingen): ' + e.message + '. Probeer de knop "Of upload handmatig" als dit blijft gebeuren.', true);
+    const lokaal = location.protocol === 'file:';
+    setStatus(lokaal
+      ? 'Prijzen konden niet geladen worden: de pagina is als los bestand geopend. Open hem via een (lokale) webserver of via de online versie.'
+      : 'Prijzen konden niet geladen worden (' + e.message + '). Probeer het later opnieuw.', true);
   }
 }
 
-document.getElementById('leverancierSelect').addEventListener('change', e=>{
-  const url = e.target.value;
-  if(!url) return;
-  const naam = e.target.options[e.target.selectedIndex].textContent;
-  loadLeverancierPrijzenCSV(url, naam);
-});
+document.getElementById('leverancierSelect').addEventListener('change', e=> kiesLeverancier(e.target.value || null));
+document.getElementById('eigenOpslag').addEventListener('input', ()=>{ if(gekozenLev === EIGEN) kiesLeverancier(EIGEN); });
+document.getElementById('eigenVast').addEventListener('input', ()=> recompute());
+document.getElementById('tariefHuidig').addEventListener('click', ()=> zetTariefModus('huidig'));
+document.getElementById('tariefHistorisch').addEventListener('click', ()=> zetTariefModus('historisch'));
+if(tariefModus === 'historisch'){ // opgeslagen keuze tonen
+  document.getElementById('tariefHuidig').classList.remove('active');
+  document.getElementById('tariefHistorisch').classList.add('active');
+  zetTariefHint();
+}
 
 async function tryAutoload(){
-  await loadLeveranciersManifest();
+  await laadLeveranciers();
   recompute();
 }
+// de batterijlijst wordt pas geladen nadat alle schuifjes gekoppeld zijn (zie onderaan het script)
 
 // ---------------------------------------------------------------
 // SLIM LADEN — rolling forecast-horizon met vooruitblik-simulatie
@@ -554,6 +968,36 @@ function markGridChargeWindow(
 ){
     const n = data.length;
 
+    // Goedkoopste prijs binnen [i, i + priceHorizonSteps) voor elke i, in één doorloop
+    // (monotone wachtrij van achter naar voren). Vervangt een geneste lus: veel sneller.
+    const minVooruit = new Array(n);
+    const rij = new Int32Array(n);
+    let kop = 0, staart = 0;
+    for(let i = n - 1; i >= 0; i--){
+        while(staart > kop && data[rij[staart - 1]].importPrice >= data[i].importPrice) staart--;
+        rij[staart++] = i;
+        while(rij[kop] >= i + priceHorizonSteps) kop++;
+        minVooruit[i] = data[rij[kop]].importPrice;
+    }
+    // Zelfde voor de duurste prijs binnen [i, i + priceHorizonSteps): de prijs die je met
+    // opgeslagen netstroom later kunt vermijden.
+    const maxVooruit = new Array(n);
+    kop = 0; staart = 0;
+    for(let i = n - 1; i >= 0; i--){
+        while(staart > kop && data[rij[staart - 1]].importPrice <= data[i].importPrice) staart--;
+        rij[staart++] = i;
+        while(rij[kop] >= i + priceHorizonSteps) kop++;
+        maxVooruit[i] = data[rij[kop]].importPrice;
+    }
+    const rendement = eff * eff; // round-trip
+
+    // Lopende som van de zonnestroom die de batterij per stap zou kunnen opnemen.
+    const zonSom = new Float64Array(n + 1);
+    for(let j = 0; j < n; j++){
+        const opname = data[j].exportKwh > 0 ? Math.min(data[j].exportKwh, maxChargePerStep) * eff : 0;
+        zonSom[j + 1] = zonSom[j] + opname;
+    }
+
     for(let i = 0; i < n; i++){
 
         data[i].gridChargeOk = false;
@@ -564,47 +1008,17 @@ function markGridChargeWindow(
             continue;
         }
 
-        const priceEnd = Math.min(n, i + priceHorizonSteps);
         const solarEnd = Math.min(n, i + solarHorizonSteps);
 
         // ------------------------------------------------------------
-        // Verwachte zonne-opbrengst binnen de zonne-horizon
+        // Verwachte zonne-opbrengst binnen de zonne-horizon: per stap
+        // min(overschot, laadvermogen) × rendement, tot de batterij vol is.
+        // (lopende som i.p.v. elke keer opnieuw 24 uur vooruit optellen)
         // ------------------------------------------------------------
-        let projectedSoc = currentSoc;
-        let expectedSolarCharge = 0;
-
-        for(let j = i; j < solarEnd; j++){
-
-            if(data[j].exportKwh <= 0){
-                continue;
-            }
-
-            const room = Math.max(
-                0,
-                (capacity - projectedSoc) / eff
-            );
-
-            const chargeFromSolar = Math.min(
-                data[j].exportKwh,
-                maxChargePerStep,
-                room
-            );
-
-            if(chargeFromSolar <= 0){
-                continue;
-            }
-
-            const storedEnergy = chargeFromSolar * eff;
-
-            projectedSoc += storedEnergy;
-            expectedSolarCharge += storedEnergy;
-
-            // Zodra de batterij volgens de voorspelling vol raakt
-            // hoeven we niet verder vooruit te kijken.
-            if(projectedSoc >= capacity - 0.001){
-                break;
-            }
-        }
+        const expectedSolarCharge = Math.min(
+            Math.max(0, capacity - currentSoc),
+            zonSom[solarEnd] - zonSom[i]
+        );
 
         // ------------------------------------------------------------
         // Hoeveel energie ontbreekt er nog nadat de zon zijn werk heeft gedaan?
@@ -615,26 +1029,24 @@ function markGridChargeWindow(
         );
 
         // Genoeg zon verwacht -> niet laden vanaf het net
-        if(remainingEnergyNeeded <= 0){
+        // (kleine marge tegen afrondingsruis in de lopende som)
+        if(remainingEnergyNeeded <= 1e-9){
             continue;
         }
 
         // ------------------------------------------------------------
         // Zoek goedkoopste prijs binnen prijs-horizon
         // ------------------------------------------------------------
-        let cheapestPrice = Infinity;
+        // (vooraf berekend met een glijdend minimum: goedkoopste prijs in [i, priceEnd))
+        const cheapestPrice = minVooruit[i];
 
-        for(let j = i; j < priceEnd; j++){
-            cheapestPrice = Math.min(
-                cheapestPrice,
-                data[j].importPrice
-            );
-        }
-
-        // Alleen laden op negatieve prijzen of op het goedkoopste moment
+        // Alleen laden op negatieve prijzen, of op het goedkoopste moment binnen de horizon
+        // ÉN alleen als dat na laad-/ontlaadverlies goedkoper is dan het duurste uur dat
+        // nog komt (anders kost bijladen geld: bijv. "goedkoopste" uur vlak voor de piek).
+        const loontZich = data[i].importPrice < maxVooruit[i] * rendement - 0.000001;
         if(
             data[i].importPrice < 0 ||
-            data[i].importPrice <= cheapestPrice + 0.000001
+            (data[i].importPrice <= cheapestPrice + 0.000001 && loontZich)
         ){
             data[i].gridChargeOk = true;
 
@@ -647,7 +1059,9 @@ function markGridChargeWindow(
 // ---------------------------------------------------------------
 // SIMULATIE
 // ---------------------------------------------------------------
-function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPct, stepHours, gridChargeEnabled){
+// waardeVeld: wat een kWh zonnestroom waard is als je hem níet opslaat (de "kostprijs" van opslaan).
+// Zonder salderen is dat de kale terugleverprijs ('exportPrice'), mét salderen de volle uurprijs ('salderPrice').
+function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPct, stepHours, gridChargeEnabled, waardeVeld = 'exportPrice'){
   const eff = Math.sqrt(rte/100);
   const maxC = chargeKw * stepHours, maxD = dischargeKw * stepHours; // kWh per stap
   let soc = 0;
@@ -656,24 +1070,32 @@ function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPc
   const out = [];
   for(const d of data){
     let newImport = d.importKwh, newExport = d.exportKwh;
+    let vanNetGeladen = false;
     if(d.exportKwh > 0){
       // zonneoverschot: eerst altijd hiermee opladen (gratis, geen extra netbelasting)
       const room = (capacity - soc) / eff;
       const c = Math.min(d.exportKwh, maxC, room);
-      if(c > 0){ soc += c * eff; costPool += c * d.exportPrice; }
+      if(c > 0){ soc += c * eff; costPool += c * (d[waardeVeld] ?? d.exportPrice); }
       newExport = d.exportKwh - c;
     } else if(gridChargeEnabled && d.gridChargeOk && soc < capacity){
       // slim laden: geen zonneoverschot, maar wel een verwacht tekort tot de
       // eerstvolgende zon (of horizon-einde) én dit is het goedkoopste/negatieve
       // moment daarbinnen. Laad niet meer bij dan het verwachte tekort vraagt.
       const room = (capacity - soc) / eff;
-      const c = Math.min(maxC, room, d.tekort);
+      // alleen bijladen wat er bovenop de huidige lading nog ontbreekt
+      const nodig = Math.max(0, d.tekort - soc) / eff;
+      const c = Math.min(maxC, room, nodig);
       if(c > 0){
         soc += c * eff;
         costPool += c * d.importPrice;
         newImport = d.importKwh + c; // extra afname t.o.v. de meterstand
+        vanNetGeladen = true;
       }
-    } else if(d.importKwh > 0 && soc > 0){
+    }
+    // Ontladen voor afname — óók in een stap met zonneoverschot: binnen een uur (of kwartier)
+    // wisselen zon en verbruik elkaar af (wolk, waterkoker, ochtend/avond). Alleen niet in
+    // een stap waarin net vanaf het net is bijgeladen.
+    if(!vanNetGeladen && d.importKwh > 0 && soc > 0){
       let allow = true;
       if(strategy === 'smart'){
         const avgCost = costPool / soc;          // eur per opgeslagen kWh
@@ -692,7 +1114,7 @@ function simulate(data, capacity, chargeKw, dischargeKw, rte, strategy, marginPc
       }
     }
     out.push({hourKey:d.hourKey, importKwh:newImport, exportKwh:newExport,
-               importPrice:d.importPrice, exportPrice:d.exportPrice, month:d.hourKey.slice(0,7)});
+               importPrice:d.importPrice, exportPrice:d.exportPrice, salderPrice:d.salderPrice, month:d.hourKey.slice(0,7)});
   }
   return out;
 }
@@ -702,14 +1124,21 @@ function kostenZonderSalderen(rows){
   for(const r of rows) cost += r.importKwh*r.importPrice - r.exportKwh*r.exportPrice;
   return cost;
 }
+// Salderen bij een dynamisch contract: elk afgenomen uur betaal je de uurprijs van dát uur, elk
+// teruggeleverd uur krijg je de uurprijs van dát uur terug (incl. energiebelasting en btw) — tot
+// je totale afname. Lever je over de periode méér terug dan je afneemt, dan krijgt dat overschot
+// alleen de kale terugleverprijs (naar rato over alle teruggeleverde uren verdeeld).
+// Zo telt het verplaatsen van stroom naar dure uren ook mét salderen mee.
 function kostenMetSalderen(rows){
-  let totIn=0, totOut=0, sumInP=0, sumOutP=0;
-  for(const r of rows){ totIn+=r.importKwh; totOut+=r.exportKwh;
-    sumInP += r.importKwh*r.importPrice; sumOutP += r.exportKwh*r.exportPrice; }
-  const avgIn = totIn>0 ? sumInP/totIn : 0;
-  const avgOut = totOut>0 ? sumOutP/totOut : 0;
-  const gesaldeerd = Math.min(totIn, totOut);
-  return (totIn-gesaldeerd)*avgIn - (totOut-gesaldeerd)*avgOut;
+  let totIn = 0, totOut = 0, afname = 0, terugVol = 0, terugKaal = 0;
+  for(const r of rows){
+    totIn += r.importKwh; totOut += r.exportKwh;
+    afname += r.importKwh * r.importPrice;
+    terugVol += r.exportKwh * (r.salderPrice ?? r.importPrice);
+    terugKaal += r.exportKwh * r.exportPrice;
+  }
+  const deelGesaldeerd = totOut > 0 ? Math.min(1, totIn / totOut) : 0;
+  return afname - deelGesaldeerd * terugVol - (1 - deelGesaldeerd) * terugKaal;
 }
 
 function fmtEuro(v){
@@ -721,34 +1150,41 @@ function fmtEuro(v){
 // RECOMPUTE
 // ---------------------------------------------------------------
 function recompute(){
-  if(!meterRows || !priceRows){ setStatus('Wacht op beide CSV\u2019s...'); return; }
+  zetTariefHint();
+  if(!meterRows || !priceRows){
+    document.body.classList.remove('has-results');
+    if(!epexRows && !priceRows) return; // prijzen nog aan het laden
+    setStatus(!meterRows && !priceRows ? 'Upload je meter-CSV en kies je leverancier.' : !meterRows ? 'Upload nu je meter-CSV.' : 'Kies nu je energieleverancier.');
+    return;
+  }
 
   const cap = parseFloat(document.getElementById('cap').value);
   const chargeKw = parseFloat(document.getElementById('charge').value);
   const dischargeKw = parseFloat(document.getElementById('discharge').value);
   const rte = parseFloat(document.getElementById('rte').value);
-  const energiebelasting = parseFloat(document.getElementById('energiebelasting').value);
-  const inkoopvergoeding = parseFloat(document.getElementById('inkoopvergoeding').value);
-  const btw = parseFloat(document.getElementById('btw').value);
+  const terugleverkosten = parseFloat(document.getElementById('terugleverkosten').value);
   const reservePct = parseFloat(document.getElementById('reserve').value);
 
   // koppel meter + prijs per bucket (uur of kwartier)
   const data = [];
   let missing = 0;
+  const terug = terugVoor(gekozenLev);
   for(const m of meterRows){
+    // p = volledige kWh-prijs voor afname (beursprijs + opslag + energiebelasting, incl. btw)
     const p = lookupPrice(priceRows, m.hourKey, resMode);
-    if(p === undefined){ missing++; continue; }
-    // p = volledige (met-salderen) kWh-prijs incl. energiebelasting, inkoopvergoeding en btw.
-    // Zonder salderen krijg je alleen de kale inkoopprijs terug voor teruglevering:
-    const kaleInkoopprijs = p/(1+btw/100) - energiebelasting - inkoopvergoeding;
-    data.push({hourKey:m.hourKey, importKwh:m.importKwh, exportKwh:m.exportKwh,
-                importPrice:p, exportPrice:kaleInkoopprijs, month:m.hourKey.slice(0,7)});
+    // Teruglevering: kale beursprijs + de voorwaarden van de leverancier (zie terugPrijzen).
+    const kaal = kalePrijzen ? lookupPrice(kalePrijzen, m.hourKey, resMode) : undefined;
+    if(p === undefined || kaal === undefined){ missing++; continue; }
+    data.push({hourKey:m.hourKey, importKwh:m.importKwh, exportKwh:m.exportKwh, importPrice:p,
+                ...terugPrijzen(terug, kaal, m.hourKey, terugleverkosten), kaal,
+                month:m.hourKey.slice(0,7)});
   }
 
   const eenheid = resMode === 'kwartier' ? 'kwartieren' : 'uren';
-  if(data.length === 0){ setStatus('Geen overlappende ' + eenheid + ' gevonden tussen meter- en prijzendata.', true); return; }
+  if(data.length === 0){ document.body.classList.remove('has-results'); setStatus('Geen overlappende ' + eenheid + ' gevonden tussen meter- en prijzendata.', true); return; }
   setStatus(data.length + ' ' + eenheid + ' gekoppeld' + (missing? ' (' + missing + ' zonder prijsmatch overgeslagen)':'') + '.');
 
+  document.body.classList.add('has-results');
   const base = data; // ongewijzigd = 0 batterij
   const stepHours = resMode === 'kwartier' ? 0.25 : 1;
   const priceHorizonHours = parseFloat(
@@ -781,11 +1217,24 @@ function recompute(){
           0
       );
   }
-  const sim = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours, gridChargeMode===1);
+  // Twee simulaties: de batterij beslist anders als opgeslagen zonnestroom de volle uurprijs waard is (salderen)
+  const simZonder = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours, gridChargeMode===1, 'exportPrice');
+  const simMet    = simulate(data, cap, chargeKw, dischargeKw, rte, stratMode, reservePct, stepHours, gridChargeMode===1, 'salderPrice');
+  const sim = saldMode ? simMet : simZonder; // voor het hoofdresultaat en de maandgrafiek
+  // bewaren voor het batterijadvies (dat dezelfde data en instellingen voor elke batterij doorrekent)
+  laatsteBerekening = { data, stepHours, priceHorizonSteps, solarHorizonSteps, strat: stratMode, reserve: reservePct,
+                        gridCharge: gridChargeMode === 1, salderen: saldMode === 1,
+                        batterij: { cap, chargeKw, dischargeKw, rte }, terugleverkosten };
 
+  // vaste leveringskosten van de leverancier tellen mee in de totalen (met én zonder batterij,
+  // dus de besparing verandert er niet door)
+  const dagen = data.length * stepHours / 24;
+  const jaarFactor = 365 / Math.max(1, dagen);
+  const vastPerJaar = 12 * vasteKostenMaand(gekozenLev);
+  const vastPeriode = vastPerJaar / jaarFactor;
   const scenarios = {
-    'Zonder salderen': [kostenZonderSalderen(base), kostenZonderSalderen(sim)],
-    'Met salderen':    [kostenMetSalderen(base),    kostenMetSalderen(sim)],
+    'Zonder salderen': [kostenZonderSalderen(base) + vastPeriode, kostenZonderSalderen(simZonder) + vastPeriode],
+    'Met salderen':    [kostenMetSalderen(base) + vastPeriode,    kostenMetSalderen(simMet) + vastPeriode],
   };
 
   // tabel
@@ -800,13 +1249,36 @@ function recompute(){
 
   // hero
   const heroKey = saldMode ? 'Met salderen' : 'Zonder salderen';
-  const [hb, ha] = scenarios[heroKey];
+  // hoofdresultaat omrekenen naar een jaar (de tabel toont totalen over de gekoppelde periode)
+  const [pb, pa] = scenarios[heroKey];
+  const hb = pb * jaarFactor, ha = pa * jaarFactor;
   document.getElementById('heroBefore').textContent = fmtEuro(hb);
   document.getElementById('heroAfter').textContent = fmtEuro(ha);
   const hs = hb-ha;
   const hsEl = document.getElementById('heroSavings');
   hsEl.textContent = fmtEuro(hs);
-  hsEl.className = 'num ' + (hs>=0?'pos':'neg');
+  hsEl.className = 'hero-big ' + (hs>=0?'pos':'neg');
+  const capNum = parseFloat(document.getElementById('cap').value);
+  document.getElementById('heroSavingsSup').textContent = capNum > 0 ? fmtEuro(hs / capNum) + ' per kWh batterijcapaciteit per jaar' : '';
+  toonTerugverdientijd(hs);
+
+  // Netafname: hoeveel stroom haal je nog van het net, en op hoeveel dagen vrijwel niets?
+  const perDag = rows => { const m = new Map(); for(const r of rows){ const k = r.hourKey.slice(0,10); m.set(k, (m.get(k) || 0) + r.importKwh); } return m; };
+  const afnameVoor = base.reduce((t, r) => t + r.importKwh, 0), afnameNa = sim.reduce((t, r) => t + r.importKwh, 0);
+  const dagenVoor = [...perDag(base).values()].filter(v => v < 0.1).length, dagenNa = [...perDag(sim).values()].filter(v => v < 0.1).length;
+  const kwh = v => Math.round(v * jaarFactor).toLocaleString('nl-NL') + ' kWh';
+  document.getElementById('netNote').innerHTML =
+    'Van het net: <b>' + kwh(afnameVoor) + '</b> → <b>' + kwh(afnameNa) + '</b> per jaar' +
+    (afnameVoor > 0 ? ' (' + (afnameNa <= afnameVoor ? '−' : '+') + Math.abs(Math.round(100 * (1 - afnameNa / afnameVoor))) + '%)' : '') +
+    '. Dagen (vrijwel) zonder netafname: ' + dagenVoor + ' → <b>' + dagenNa + '</b>.';
+  laatsteBerekening.sim = sim;
+  const fmtDag = k => { const [y,m,d] = k.slice(0,10).split('-'); return d + '-' + m + '-' + y; };
+  document.getElementById('periodNote').innerHTML =
+    'Gebaseerd op <b>' + Math.round(dagen) + ' dagen</b> gekoppelde data (' + fmtDag(data[0].hourKey) + ' t/m ' + fmtDag(data[data.length-1].hourKey) + '). ' +
+    'Bovenstaande bedragen zijn omgerekend naar een jaar; de tabel toont totalen over de hele periode. ' +
+    'Inclusief ' + fmtEuro(vastPerJaar) + ' vaste leveringskosten per jaar' + (vasteKostenGeschat(gekozenLev) ? ' (geschat)' : '') +
+    '; netbeheerkosten en de belastingvermindering zijn niet meegerekend (die zijn bij elke leverancier gelijk).' +
+    (dagen < 330 ? ' <span style="color:var(--amber)">Minder dan een jaar data — zomer/winter-verschillen kunnen het jaarbedrag vertekenen.</span>' : '');
 
   // maandelijkse besparing (hoofdresultaat) voor de balk-grafiek
   const monthsBase = new Map(), monthsSim = new Map();
@@ -820,33 +1292,325 @@ function recompute(){
   const maxAbs = Math.max(1, ...monthSavings.map(x=>Math.abs(x.savings)));
   const barsEl = document.getElementById('bars');
   barsEl.innerHTML = '';
+  const meerdereJaren = months.length > 0 && months[0].slice(0,4) !== months[months.length-1].slice(0,4);
   for(const ms of monthSavings){
     const col = document.createElement('div'); col.className='bar-col';
     const bar = document.createElement('div');
     bar.className = 'bar' + (ms.savings<0 ? ' neg' : '');
-    bar.style.height = Math.max(2, Math.abs(ms.savings)/maxAbs*130) + 'px';
+    bar.style.height = Math.max(2, Math.abs(ms.savings)/maxAbs*140) + 'px';
     bar.title = ms.month + ': ' + fmtEuro(ms.savings);
-    const label = document.createElement('div'); label.className='bar-label'; label.textContent = ms.month.slice(5);
+    const label = document.createElement('div'); label.className='bar-label'; label.textContent = meerdereJaren ? ms.month.slice(5) + '/' + ms.month.slice(2,4) : ms.month.slice(5);
     col.appendChild(bar); col.appendChild(label);
     barsEl.appendChild(col);
   }
 
   document.getElementById('dataNote').style.display = 'block';
   document.getElementById('dataNote').innerHTML =
-    '<b>Let op:</b> exportprijs (kale inkoopprijs) = prijs \u00f7 (1 + btw) \u2212 energiebelasting \u2212 inkoopvergoeding. ' +
-    (stratMode==='smart' ? 'De batterij reserveert lading voor de duurste ' + reservePct + '% van de uren per dag.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).') +
-    (gridChargeMode ? ' Slim laden staat aan: per moment wordt binnen de eerstvolgende ' + horizonUur + ' uur geprojecteerd of de batterij (uitgaande van een lege start) daadwerkelijk vol raakt door de verwachte zon — is dat zo, dan laadt hij niet bij; raakt hij niet vol (te weinig zon binnen de horizon), dan laadt hij alleen bij op het goedkoopste (of negatieve) moment daarbinnen, en niet meer dan het berekende tekort vraagt.' : '');
+    '<b>Hoe er gerekend wordt:</b> afname kost de uurprijs van je leverancier (beursprijs + opslag + energiebelasting, incl. btw). ' +
+    'Teruglevering: ' + terugTekst(gekozenLev) + (terugleverkosten > 0 ? ', min ' + fmtEuro(terugleverkosten) + ' extra terugleverkosten' : '') + '. ' +
+    (stratMode==='smart' ? 'De batterij ontlaadt alleen als de huidige prijs minstens ' + reservePct + '% boven de gemiddelde kostprijs van de opgeslagen energie ligt.' : 'De batterij ontlaadt meteen zodra er een tekort is (geen prijs-timing).') +
+    (gridChargeMode ? ' Slim laden staat aan: per moment wordt binnen de eerstvolgende ' + priceHorizonHours + ' uur geprojecteerd of de batterij (uitgaande van een lege start) daadwerkelijk vol raakt door de verwachte zon — is dat zo, dan laadt hij niet bij; raakt hij niet vol (te weinig zon binnen de horizon), dan laadt hij alleen bij op het goedkoopste (of negatieve) moment daarbinnen, en niet meer dan het berekende tekort vraagt.' : '');
+
+  // advies pas doorrekenen als de gebruiker even niets verandert (31 simulaties)
+  clearTimeout(adviesTimer);
+  adviesTimer = setTimeout(planAdvies, 300);
 }
+
+// Draait de adviezen in stukjes van ±12 ms, zodat de pagina blijft reageren. Een nieuwere
+// berekening (iemand schuift verder) breekt de lopende af.
+let adviesGeneratie = 0;
+function planAdvies(){
+  const mijn = ++adviesGeneratie;
+  const taken = [adviesStappen(), leverancierAdviesStappen()];
+  (function stap(){
+    if(mijn !== adviesGeneratie) return;
+    const t0 = Date.now();
+    while(taken.length && Date.now() - t0 < 12){ if(taken[0].next().done) taken.shift(); }
+    if(taken.length) setTimeout(stap, 0);
+  })();
+}
+const helemaal = gen => { let r; do { r = gen.next(); } while(!r.done); return r.value; };
+
+// ---------------------------------------------------------------
+// BATTERIJADVIES: elke batterij uit de lijst doorrekenen met jouw data
+// ---------------------------------------------------------------
+let laatsteBerekening = null, adviesTimer = null, adviesFilter = 'alle', adviesAllesTonen = false, laatsteAdvies = [];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtJaren = j => j.toFixed(1).replace('.', ',') + ' jaar';
+
+function* adviesStappen(){
+  const L = laatsteBerekening;
+  if(!L || !batterijDb.length) return [];
+  const kosten = L.salderen ? kostenMetSalderen : kostenZonderSalderen;
+  const jaarFactor = 365 / Math.max(1, L.data.length * L.stepHours / 24);
+  const zonder = kosten(L.data) * jaarFactor;
+  const uitkomst = [];
+  for(const b of batterijDb){
+    const d = L.data.map(x => ({...x}));
+    if(L.gridCharge) markGridChargeWindow(d, L.priceHorizonSteps, L.solarHorizonSteps, b.capaciteit, b.laadKw * L.stepHours, Math.sqrt(b.rendement/100), 0);
+    const sim = simulate(d, b.capaciteit, b.laadKw, b.ontlaadKw, b.rendement, L.strat, L.reserve, L.stepHours, L.gridCharge, L.salderen ? 'salderPrice' : 'exportPrice');
+    const besparing = zonder - kosten(sim) * jaarFactor;
+    uitkomst.push({ b, besparing, jaren: b.prijs && besparing > 0 ? b.prijs / besparing : null });
+    yield;
+  }
+  laatsteAdvies = uitkomst;
+  toonAdvies();
+  return laatsteAdvies;
+}
+const berekenAdvies = () => helemaal(adviesStappen());
+
+// volgorde: eerst met bekende prijs (kortste terugverdientijd), dan zonder prijs (hoogste besparing)
+function sorteerAdvies(lijst){
+  return [...lijst].sort((x, y) => {
+    if((x.jaren === null) !== (y.jaren === null)) return x.jaren === null ? 1 : -1;
+    if(x.jaren !== null) return x.jaren - y.jaren;
+    return y.besparing - x.besparing;
+  });
+}
+
+function toonAdvies(){
+  const lijst = sorteerAdvies(laatsteAdvies.filter(r => adviesFilter === 'alle' || r.b.type === adviesFilter));
+  const top = document.getElementById('adviesTop'), tbody = document.getElementById('adviesTabel');
+  if(!lijst.length){ top.textContent = 'Geen batterijen in deze categorie.'; tbody.innerHTML = ''; return; }
+  const gekozen = document.getElementById('batterijSelect').value;
+  const beste = lijst.find(r => r.jaren !== null);
+  const meeste = [...lijst].sort((x, y) => y.besparing - x.besparing)[0];
+  const naam = r => esc(r.b.merk + ' ' + r.b.model);
+  if(beste){
+    top.innerHTML = 'Beste keuze voor jou: <b>' + naam(beste) + '</b>. Die verdient zich in <b>' + fmtJaren(beste.jaren) +
+      '</b> terug en bespaart ' + fmtEuro(beste.besparing) + ' per jaar.' +
+      (meeste.b.id !== beste.b.id ? ' Wil je zoveel mogelijk besparen? De <b>' + naam(meeste) + '</b> bespaart het meest: ' + fmtEuro(meeste.besparing) + ' per jaar.' : '') +
+      (beste.jaren > 15 ? ' <br>Let op: zelfs de beste optie verdient zich pas na de verwachte levensduur (10–15 jaar) terug.' : '');
+  } else {
+    top.innerHTML = 'Van deze batterijen is geen prijs bekend. De <b>' + naam(meeste) + '</b> bespaart het meest: ' + fmtEuro(meeste.besparing) + ' per jaar.';
+  }
+  const zichtbaar = adviesAllesTonen ? lijst : lijst.slice(0, 8);
+  tbody.innerHTML = zichtbaar.map(r => {
+    const klassen = [r === beste ? 'best' : '', r.b.id === gekozen ? 'huidig' : ''].filter(Boolean).join(' ');
+    return '<tr' + (klassen ? ' class="' + klassen + '"' : '') + '>' +
+      '<td>' + naam(r) + '<small>' + String(r.b.capaciteit).replace('.', ',') + ' kWh · ' + String(r.b.laadKw).replace('.', ',') + ' kW</small></td>' +
+      '<td class="' + (r.besparing >= 0 ? 'pos' : 'neg') + '">' + fmtEuro(r.besparing) + '</td>' +
+      '<td>' + (r.b.prijs ? fmtEuro(r.b.prijs).replace(',00', '') : 'onbekend') + '</td>' +
+      '<td>' + (r.jaren !== null ? fmtJaren(r.jaren) : (r.b.prijs ? 'nooit' : '—')) + '</td>' +
+      '<td><button type="button" class="kies-btn" data-kies="' + esc(r.b.id) + '">Kies</button></td></tr>';
+  }).join('') + (lijst.length > 8 ? '<tr><td colspan="5"><button type="button" class="toon-meer" data-meer="1">' +
+      (adviesAllesTonen ? 'Toon minder' : 'Toon alle ' + lijst.length + ' batterijen') + '</button></td></tr>' : '');
+  document.getElementById('adviesNote').textContent =
+    'Berekend met jouw meterdata, je leverancier en je strategie-instellingen (' + (laatsteBerekening.salderen ? 'met' : 'zonder') + ' salderen). ' +
+    'Prijzen zijn indicatief en niet altijd vergelijkbaar (wel/geen installatie of btw-teruggave); vul bij een offerte je eigen prijs in.';
+}
+
+document.getElementById('adviesTabel').addEventListener('click', e => {
+  const t = e.target;
+  if(!t || !t.getAttribute) return;
+  const id = t.getAttribute('data-kies');
+  if(id){ document.getElementById('batterijSelect').value = id; kiesBatterij(id); return; }
+  if(t.getAttribute('data-meer')){ adviesAllesTonen = !adviesAllesTonen; toonAdvies(); }
+});
+for(const [knop, waarde] of [['adviesAlles','alle'], ['adviesStekker','stekker'], ['adviesVast','vast']]){
+  document.getElementById(knop).addEventListener('click', ()=>{
+    adviesFilter = waarde;
+    for(const k of ['adviesAlles','adviesStekker','adviesVast']) document.getElementById(k).classList.toggle('active', k === knop);
+    toonAdvies();
+  });
+}
+
+// ---------------------------------------------------------------
+// LEVERANCIERSADVIES: elke leverancier doorrekenen met jouw data en batterij
+// ---------------------------------------------------------------
+let levAllesTonen = false, laatsteLevAdvies = [];
+let epexIndex = null, epexIndexBron = null; // "YYYY-MM-DD HH" -> beursprijzen in dat uur (2 bij wintertijd)
+
+// Prijs voor een leverancier in een bucket, op precies dezelfde manier als de hoofdberekening
+// (uurprijs, afgerond op 6 decimalen, gemiddeld bij een dubbel uur) maar zonder tussentekst.
+function leverancierPrijs(perioden, btwF, hourKey){
+  if(epexIndexBron !== epexRows){
+    epexIndex = new Map(); epexIndexBron = epexRows;
+    for(const r of epexRows){
+      const k = r.datum.slice(0,10) + ' ' + r.datum.slice(11,13);
+      if(!epexIndex.has(k)) epexIndex.set(k, []);
+      epexIndex.get(k).push(r);
+    }
+  }
+  const rijen = epexIndex.get(hourKey.slice(0,13));
+  if(!rijen) return undefined;
+  let som = 0;
+  for(const r of rijen) som += Math.round((r.prijs + vastOp(perioden, r.datum)) * btwF * 1e6) / 1e6;
+  return som / rijen.length;
+}
+
+function* leverancierAdviesStappen(){
+  const L = laatsteBerekening;
+  if(!L || !levConfig || !epexRows) return [];
+  const kosten = L.salderen ? kostenMetSalderen : kostenZonderSalderen;
+  const jaarFactor = 365 / Math.max(1, L.data.length * L.stepHours / 24);
+  const { cap, chargeKw, dischargeKw, rte } = L.batterij;
+  const btwF = 1 + levConfig.btw;
+  const uitkomst = [];
+  for(const naam of Object.keys(levConfig.leveranciers)){
+    // Zelfde tarieven als het hoofdresultaat (huidig of historisch), zodat de getallen overeenkomen.
+    const perioden = periodenVoor(naam);
+    const terug = terugVoor(naam);
+    const d = L.data.map(x => ({...x, importPrice: leverancierPrijs(perioden, btwF, x.hourKey), ...terugPrijzen(terug, x.kaal, x.hourKey, L.terugleverkosten)}));
+    if(!d.some(x => x.importPrice === undefined)){
+      if(L.gridCharge) markGridChargeWindow(d, L.priceHorizonSteps, L.solarHorizonSteps, cap, chargeKw * L.stepHours, Math.sqrt(rte/100), 0);
+      const sim = simulate(d, cap, chargeKw, dischargeKw, rte, L.strat, L.reserve, L.stepHours, L.gridCharge, L.salderen ? 'salderPrice' : 'exportPrice');
+      const vast = 12 * vasteKostenMaand(naam);
+      uitkomst.push({ naam, zonder: kosten(d) * jaarFactor + vast, met: kosten(sim) * jaarFactor + vast, vast, vastGeschat: vasteKostenGeschat(naam) });
+    }
+    yield;
+  }
+  laatsteLevAdvies = uitkomst.sort((a, b) => a.met - b.met);
+  toonLeverancierAdvies();
+  return laatsteLevAdvies;
+}
+const berekenLeverancierAdvies = () => helemaal(leverancierAdviesStappen());
+
+function toonLeverancierAdvies(){
+  const lijst = laatsteLevAdvies;
+  const top = document.getElementById('levAdviesTop'), tbody = document.getElementById('levAdviesTabel');
+  if(!lijst.length){ top.textContent = 'Nog geen vergelijking beschikbaar.'; tbody.innerHTML = ''; return; }
+  const beste = lijst[0];
+  const huidig = lijst.find(r => r.naam === gekozenLev);
+  let tekst = 'Goedkoopst voor jou: <b>' + esc(beste.naam) + '</b>, ' + fmtEuro(beste.met) + ' per jaar met je batterij';
+  if(huidig && huidig !== beste) tekst += '. Dat is <b>' + fmtEuro(huidig.met - beste.met) + ' per jaar</b> goedkoper dan ' + esc(huidig.naam) + '.';
+  else if(huidig === beste) tekst += '. Dat is de leverancier die je nu gekozen hebt.';
+  else tekst += '.';
+  const besteZonder = [...lijst].sort((a, b) => a.zonder - b.zonder)[0];
+  if(besteZonder.naam !== beste.naam) tekst += ' Zonder batterij is ' + esc(besteZonder.naam) + ' het goedkoopst.';
+  top.innerHTML = tekst;
+  const zichtbaar = levAllesTonen ? lijst : lijst.slice(0, 8);
+  tbody.innerHTML = zichtbaar.map((r, i) => {
+    const klassen = [i === 0 ? 'best' : '', r.naam === gekozenLev ? 'huidig' : ''].filter(Boolean).join(' ');
+    const verschil = r.met - beste.met;
+    return '<tr' + (klassen ? ' class="' + klassen + '"' : '') + '>' +
+      '<td>' + esc(r.naam) + (terugVoor(r.naam).bekend ? '' : ' *') + '<small>' + fmtEuro(r.vast / 12) + ' per maand vast' + (r.vastGeschat ? ' (geschat)' : '') + '</small></td>' +
+      '<td>' + fmtEuro(r.zonder) + '</td><td>' + fmtEuro(r.met) + '</td>' +
+      '<td class="' + (verschil < 0.005 ? 'pos' : 'neg') + '">' + (verschil < 0.005 ? 'goedkoopst' : '+' + fmtEuro(verschil)) + '</td>' +
+      '<td>' + (r.naam === gekozenLev ? '' : '<button type="button" class="kies-btn" data-lev="' + esc(r.naam) + '">Kies</button>') + '</td></tr>';
+  }).join('') + (lijst.length > 8 ? '<tr><td colspan="5"><button type="button" class="toon-meer" data-meer="1">' +
+      (levAllesTonen ? 'Toon minder' : 'Toon alle ' + lijst.length + ' leveranciers') + '</button></td></tr>' : '');
+  const b = laatsteBerekening.batterij;
+  document.getElementById('levAdviesNote').textContent =
+    'Jaarkosten voor stroom op jouw meterdata met de ' + (tariefModus === 'huidig' ? 'huidige' : 'historische') + ' opslag van elke leverancier, ' +
+    (laatsteBerekening.salderen ? 'met' : 'zonder') + ' salderen, met een batterij van ' +
+    String(b.cap).replace('.', ',') + ' kWh, inclusief vaste leveringskosten en de terugleveringsvoorwaarden van elke leverancier ' +
+    '(bonus of verkoopvergoeding; waar die onbekend zijn: alleen de beursprijs, gemarkeerd met *). Niet meegerekend: netbeheerkosten en de belastingvermindering ' +
+    '(bij elke leverancier gelijk) en welkomstkortingen. Tarieven laatst gecontroleerd: ' + (levConfig.laatstGecontroleerd || 'onbekend') + '.';
+}
+
+document.getElementById('levAdviesTabel').addEventListener('click', e => {
+  const t = e.target;
+  if(!t || !t.getAttribute) return;
+  const naam = t.getAttribute('data-lev');
+  if(naam){ document.getElementById('leverancierSelect').value = naam; kiesLeverancier(naam); return; }
+  if(t.getAttribute('data-meer')){ levAllesTonen = !levAllesTonen; toonLeverancierAdvies(); }
+});
 
 // ---------------------------------------------------------------
 // UI BINDINGS
 // ---------------------------------------------------------------
+const zetLabel = {};  // id -> functie die het waardelabel bijwerkt (ook gebruikt bij het kiezen van een batterij)
+const BATTERIJ_VELDEN = ['cap', 'charge', 'discharge', 'rte'];
 function bindRange(id, labelId, suffix, decimals){
   const el = document.getElementById(id);
   const label = document.getElementById(labelId);
-  const update = ()=>{ label.textContent = parseFloat(el.value).toFixed(decimals) + suffix; recompute(); };
-  el.addEventListener('input', update);
-  update();
+  zetLabel[id] = ()=>{ label.textContent = parseFloat(el.value).toFixed(decimals) + suffix; };
+  el.addEventListener('input', ()=>{
+    zetLabel[id]();
+    if(BATTERIJ_VELDEN.includes(id)) batterijHandmatig(); // zelf geschoven → niet meer een bepaald model
+    recompute();
+  });
+  zetLabel[id]();
+  recompute();
+}
+
+// ---------------------------------------------------------------
+// THUISBATTERIJEN (data/batterijen.json)
+// ---------------------------------------------------------------
+let batterijDb = [];
+
+async function laadBatterijen(){
+  const select = document.getElementById('batterijSelect');
+  try{
+    batterijDb = JSON.parse(await fetchMetRetry('data/batterijen.json', 2)).batterijen || [];
+  }catch(e){
+    document.getElementById('batterijInfo').textContent = 'Batterijlijst kon niet geladen worden; stel de batterij hieronder zelf in.';
+    return;
+  }
+  const perMerk = new Map();
+  for(const b of batterijDb){ if(!perMerk.has(b.merk)) perMerk.set(b.merk, []); perMerk.get(b.merk).push(b); }
+  for(const [merk, lijst] of [...perMerk].sort((a,b)=> a[0].localeCompare(b[0], 'nl'))){
+    const groep = document.createElement('optgroup');
+    groep.label = merk;
+    for(const b of lijst){
+      const opt = document.createElement('option');
+      opt.value = b.id;
+      opt.textContent = b.merk + ' ' + b.model + ' — ' + String(b.capaciteit).replace('.', ',') + ' kWh';
+      groep.appendChild(opt);
+    }
+    select.appendChild(groep);
+  }
+  let vorige = null;
+  try{ vorige = localStorage.getItem('hb.batterij'); }catch(e){}
+  if(vorige && batterijDb.some(b => b.id === vorige)){ select.value = vorige; kiesBatterij(vorige); }
+}
+
+function kiesBatterij(id){
+  const b = batterijDb.find(x => x.id === id);
+  if(!b){ batterijHandmatig(); recompute(); return; }
+  const waarden = {cap: b.capaciteit, charge: b.laadKw, discharge: b.ontlaadKw, rte: b.rendement};
+  for(const [veld, w] of Object.entries(waarden)){
+    document.getElementById(veld).value = String(w);
+    zetLabel[veld]();
+  }
+  const namen = {laadKw:'laadvermogen', ontlaadKw:'ontlaadvermogen', rendement:'rendement', capaciteit:'capaciteit'};
+  const geschat = (b.geschat || []).map(g => namen[g] || g);
+  document.getElementById('batterijInfo').textContent =
+    b.merk + ' ' + b.model + '. ' + (b.opmerking || '') +
+    (geschat.length ? ' Geschat (niet door fabrikant gepubliceerd): ' + geschat.join(', ') + '.' : '');
+  document.getElementById('prijs').value = b.prijs ? String(b.prijs) : '';
+  document.getElementById('prijsInfo').textContent = b.prijs
+    ? 'Indicatie: ' + (b.prijsInfo || '') + ' Pas aan naar je eigen offerte.'
+    : (b.prijsInfo || 'Prijs onbekend.') + ' Vul je offerteprijs in voor de terugverdientijd.';
+  try{ localStorage.setItem('hb.batterij', id); }catch(e){}
+  recompute();
+}
+
+function batterijHandmatig(){
+  const select = document.getElementById('batterijSelect');
+  if(select.value === '') return;
+  select.value = '';
+  document.getElementById('batterijInfo').textContent = 'Eigen instellingen.';
+  try{ localStorage.setItem('hb.batterij', ''); }catch(e){}
+}
+
+document.getElementById('batterijSelect').addEventListener('change', e=> kiesBatterij(e.target.value));
+document.getElementById('prijs').addEventListener('input', ()=> recompute());
+
+// Eenvoudige terugverdientijd: aanschafprijs ÷ besparing per jaar (hoofdscenario).
+function toonTerugverdientijd(besparingPerJaar){
+  const prijs = parseFloat(document.getElementById('prijs').value);
+  const el = document.getElementById('heroPayback'), note = document.getElementById('paybackNote');
+  el.className = 'num';
+  if(!(prijs > 0)){
+    el.textContent = '—';
+    note.textContent = 'Vul bij de batterij een aanschafprijs in.';
+    return;
+  }
+  if(!(besparingPerJaar > 0)){
+    el.textContent = 'Nooit'; el.classList.add('slecht');
+    note.textContent = 'Met deze instellingen bespaart de batterij niets, dus verdient hij zich niet terug.';
+    return;
+  }
+  const jaren = prijs / besparingPerJaar;
+  el.textContent = jaren >= 100 ? 'Meer dan 100 jaar' : jaren.toFixed(1).replace('.', ',') + ' jaar';
+  el.classList.add(jaren <= 8 ? 'goed' : jaren <= 15 ? 'matig' : 'slecht');
+  note.textContent = fmtEuro(prijs) + ' ÷ ' + fmtEuro(besparingPerJaar) + ' per jaar. ' +
+    (jaren > 15 ? 'Langer dan de verwachte levensduur van een batterij (10–15 jaar).'
+      : jaren > 10 ? 'Rond de verwachte levensduur van een batterij (10–15 jaar).'
+      : 'Ruim binnen de verwachte levensduur van een batterij (10–15 jaar).') +
+    ' Zonder prijsstijgingen of slijtage meegerekend.';
 }
 function bindRangeEuro(id, labelId, decimals){
   const el = document.getElementById(id);
@@ -859,9 +1623,7 @@ bindRange('cap','capVal',' kWh',1);
 bindRange('charge','chargeVal',' kW',1);
 bindRange('discharge','dischargeVal',' kW',1);
 bindRange('rte','rteVal','%',0);
-bindRangeEuro('energiebelasting','energiebelastingVal',3);
-bindRangeEuro('inkoopvergoeding','inkoopvergoedingVal',3);
-bindRange('btw','btwVal','%',0);
+bindRangeEuro('terugleverkosten','terugleverkostenVal',3);
 bindRange('reserve','reserveVal','%',0);
 bindRange('horizon','horizonVal',' uur',0);
 
@@ -873,20 +1635,20 @@ document.getElementById('saldUit').addEventListener('click', ()=>{
 });
 document.getElementById('stratNaive').addEventListener('click', ()=>{
   stratMode='naive'; document.getElementById('stratNaive').classList.add('active'); document.getElementById('stratSmart').classList.remove('active');
-  document.getElementById('reserveField').style.opacity='0.4'; recompute();
+  document.getElementById('reserveField').classList.add('disabled'); recompute();
 });
 document.getElementById('stratSmart').addEventListener('click', ()=>{
   stratMode='smart'; document.getElementById('stratSmart').classList.add('active'); document.getElementById('stratNaive').classList.remove('active');
-  document.getElementById('reserveField').style.opacity='1'; recompute();
+  document.getElementById('reserveField').classList.remove('disabled'); recompute();
 });
 
 document.getElementById('gridChargeUit').addEventListener('click', ()=>{
   gridChargeMode=0; document.getElementById('gridChargeUit').classList.add('active'); document.getElementById('gridChargeAan').classList.remove('active');
-  document.getElementById('horizonField').style.opacity='0.4'; recompute();
+  document.getElementById('horizonField').classList.add('disabled'); recompute();
 });
 document.getElementById('gridChargeAan').addEventListener('click', ()=>{
   gridChargeMode=1; document.getElementById('gridChargeAan').classList.add('active'); document.getElementById('gridChargeUit').classList.remove('active');
-  document.getElementById('horizonField').style.opacity='1'; recompute();
+  document.getElementById('horizonField').classList.remove('disabled'); recompute();
 });
 
 function setResolutie(nieuw){
@@ -897,13 +1659,14 @@ function setResolutie(nieuw){
   if(meterRawText){
     try{
       meterRows = loadMeterCSV(meterRawText, resMode);
-      document.getElementById('uploadMeterText').innerHTML = meterRawName + '<br><span class="hint">' + meterRows.length + ' ' + (resMode==='kwartier'?'kwartieren':'uren') + ' geladen</span>';
+      document.getElementById('uploadMeterText').innerHTML = meterRawName + '<span class="hint">' + meterRows.length + ' ' + (resMode==='kwartier'?'kwartieren':'uren') + ' geladen</span>';
     }catch(err){ setStatus('Fout bij herladen meter-CSV: '+err.message, true); }
   }
   if(priceRawText){
     try{
       priceRows = loadPriceCSV(priceRawText, resMode);
-      document.getElementById('uploadPriceText').innerHTML = (priceRawName||'') + '<br><span class="hint">' + priceRows.size + ' ' + (resMode==='kwartier'?'kwartierprijzen':'uurprijzen') + ' geladen</span>';
+      document.getElementById('levInfo').textContent = priceSummary();
+      if(epexTekstCache) kalePrijzen = loadPriceCSV(epexTekstCache, resMode);
     }catch(err){ setStatus('Fout bij herladen prijzen-CSV: '+err.message, true); }
   }
   recompute();
@@ -912,6 +1675,7 @@ document.getElementById('resUur').addEventListener('click', ()=> setResolutie('u
 document.getElementById('resKwartier').addEventListener('click', ()=> setResolutie('kwartier'));
 
 tryAutoload();
+laadBatterijen();
 </script>
 </body>
 </html>

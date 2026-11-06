@@ -1,0 +1,252 @@
+{
+  "_uitleg": [
+      "prijs per uur = (kale beursprijs uit epex.csv + vast) x (1 + btw).",
+      "vast = alle vaste kosten per kWh EXCL. btw: inkoopvergoeding/opslag van de leverancier + energiebelasting.",
+      "Per leverancier een lijst periodes; elke periode geldt vanaf zijn datum tot de volgende.",
+      "Verandert een leverancier zijn opslag? Voeg een periode toe met de nieuwe datum en het nieuwe vast-bedrag.",
+      "Energiebelasting (excl. btw): voeg elk jaar het nieuwe tarief toe. De laatste periode van elke leverancier",
+      "schuift automatisch mee met de wijziging van de energiebelasting per 1 januari; voor de eerste periode geldt dat ook terug in de tijd (schatting).",
+      "vasteKosten: vaste leveringskosten stroom per maand (incl. btw) bij een dynamisch contract. perMaand null = onbekend (de app gebruikt dan de mediaan en toont \"geschat\").",
+      "Vrij op Naam heet sinds 2026 Zon op Naam."
+  ],
+  "btw": 0.21,
+  "energiebelasting": { "2022": 0.03679, "2023": 0.12599, "2024": 0.1088, "2025": 0.10154, "2026": 0.09161, "2027": 0.088 },
+  "_energiebelasting_bron": "2027: Fiscale sleuteltabel 2027 (incl. correctie tarieven energiebelasting), rijksfinancien.nl: 8,80 cent/kWh excl. btw. Nog onder voorbehoud van aanneming Belastingplan 2027.",
+  "laatstGecontroleerd": "2026-11-06",
+  "vasteKosten": {
+    "ANWB Energie": { "perMaand": 8.5, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Budget Energie": { "perMaand": 5.99, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Coolblue Energie": { "perMaand": 7.5, "bron": "overstappen.nl (15-10-2026); jeroen.nl (nov 2026) noemt €6,20" },
+    "EasyEnergie": { "perMaand": 7, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Eneco": { "perMaand": 7, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Energie VanOns": { "perMaand": 6.99, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Energiedirect": { "perMaand": 6.99, "bron": "jeroen.nl (nov 2026)" },
+    "Energiek": { "perMaand": 5.99, "bron": "jeroen.nl (nov 2026)" },
+    "EnergyZero": { "perMaand": 7.5, "bron": "overstappen.nl (15-10-2026) (€7,51) en jeroen.nl (nov 2026)" },
+    "Essent": { "perMaand": 7.5, "bron": "jeroen.nl (nov 2026)" },
+    "Frank Energie": { "perMaand": 7.25, "bron": "jeroen.nl (nov 2026); overstappen.nl (15-10-2026) noemt €7,00 (meerdere prijsstellingen)" },
+    "Groenestroom Lokaal": { "perMaand": 5, "bron": "overstappen.nl (15-10-2026)" },
+    "Hegg Energie": { "perMaand": 7.5, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Innova Energie": { "perMaand": 6.96, "bron": "jeroen.nl (nov 2026); overstappen.nl (15-10-2026) noemt €7,97" },
+    "Mijndomein Energie": { "perMaand": null, "bron": "Geen bron gevonden" },
+    "NextEnergy": { "perMaand": 5.99, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Pure Energie": { "perMaand": 6.05, "bron": "jeroen.nl (nov 2026); overstappen.nl (15-10-2026) noemt €12,10 (lijkt een fout)" },
+    "Quatt": { "perMaand": 7.5, "bron": "jeroen.nl (nov 2026)" },
+    "SamSam": { "perMaand": 7.99, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" },
+    "Tibber": { "perMaand": 6.99, "bron": "tibber.com, jeroen.nl (nov 2026) en eerlijkverbruik.nl" },
+    "Vandebron": { "perMaand": 6.25, "bron": "jeroen.nl (nov 2026); overstappen.nl (15-10-2026) noemt €7,00" },
+    "Vattenfall": { "perMaand": 5.99, "bron": "jeroen.nl (nov 2026) en eerlijkverbruik.nl; overstappen.nl (15-10-2026) noemt €7,95" },
+    "Zon op Naam": { "perMaand": 8, "bron": "overstappen.nl (15-10-2026)" },
+    "ZonderGas": { "perMaand": 7.48, "bron": "doe-duurzaam.nl (oude bron, ±2023) — onzeker" },
+    "Zonneplan": { "perMaand": 6.25, "bron": "overstappen.nl (15-10-2026) en jeroen.nl (nov 2026)" }
+  },
+  "_teruglevering_uitleg": "Vergoeding voor teruggeleverde stroom bij een dynamisch contract, per kWh excl. btw bovenop de kale marktprijs. binnen = binnen de saldering (daar komen energiebelasting en btw bij), buiten = buiten de saldering (overschot, en iedereen vanaf 2027; geen btw). bonusPct = extra procent van de marktprijs bij positieve prijs (alleen binnen bonusUren als die er zijn). Niet vermeld = onbekend: de app rekent dan met alleen de marktprijs.",
+  "teruglevering": {
+    "ANWB Energie": { "binnen": 0.018, "buiten": 0, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026)" },
+    "Budget Energie": { "binnen": 0, "buiten": 0, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026) (Budget Thuis)" },
+    "Coolblue Energie": { "binnen": 0, "buiten": 0, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026)" },
+    "Eneco": { "binnen": 0.0292, "buiten": -0.0292, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026)" },
+    "Energiek": { "binnen": -0.018, "buiten": -0.018, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026); met \"Slim Terugleveren\" −0, 0127" },
+    "EnergyZero": { "binnen": 0, "buiten": 0, "bron": "keuze.nl/energievergelijk.nl: alleen de marktprijs, geen verkoopvergoeding" },
+    "Essent": { "binnen": 0.0253, "buiten": -0.0253, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026)" },
+    "Frank Energie": { "binnen": -0.0127, "buiten": -0.0127, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026); met \"Slim Terugleveren\" +0, 0182 en ±15% bonus" },
+    "NextEnergy": { "binnen": 0, "buiten": 0, "bonusPct": 50, "bonusUren": [6, 22], "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026); 50% zonnebonus 06–22 uur bij positieve prijs, max 6.000 kWh/jaar" },
+    "Pure Energie": { "binnen": 0.0199, "buiten": -0.0307, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026)" },
+    "Tibber": { "binnen": -0.0248, "buiten": -0.0248, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026) (sinds 01-01-2026)" },
+    "Vandebron": { "binnen": 0.0219, "buiten": -0.0136, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026)" },
+    "Vattenfall": { "binnen": 0.0255, "buiten": 0, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026)" },
+    "Zonneplan": { "binnen": 0.02, "buiten": 0.02, "bonusPct": 10, "bron": "keuze.nl \"Zo anders gaan dynamische leveranciers om met terugleveren\" (bijgewerkt 19-06-2026); 10% zonnebonus tussen zonsopkomst en -ondergang bij positieve prijs, max 7.500 kWh/jaar" }
+  },
+  "leveranciers": {
+    "ANWB Energie": [
+      { "vanaf": "2022-11-04", "vast": 0.06637 },
+      { "vanaf": "2023-01-01", "vast": 0.14354 },
+      { "vanaf": "2023-01-29", "vast": 0.14349 },
+      { "vanaf": "2024-01-01", "vast": 0.12631 },
+      { "vanaf": "2024-01-09", "vast": 0.1488 },
+      { "vanaf": "2025-01-02", "vast": 0.12954 },
+      { "vanaf": "2025-08-16", "vast": 0.14154 },
+      { "vanaf": "2025-10-06", "vast": 0.11807 },
+      { "vanaf": "2026-01-04", "vast": 0.10649 }
+    ],
+    "Budget Energie": [
+      { "vanaf": "2023-09-08", "vast": 0.14334 },
+      { "vanaf": "2024-01-01", "vast": 0.12615 },
+      { "vanaf": "2025-01-02", "vast": 0.11888 },
+      { "vanaf": "2025-12-18", "vast": 0.11544 },
+      { "vanaf": "2026-01-01", "vast": 0.10551 },
+      { "vanaf": "2026-05-06", "vast": 0.10649 }
+    ],
+    "Coolblue Energie": [
+      { "vanaf": "2026-01-03", "vast": 0.10814 },
+      { "vanaf": "2026-05-06", "vast": 0.11037 }
+    ],
+    "EasyEnergie": [
+      { "vanaf": "2022-10-23", "vast": 0.05971 },
+      { "vanaf": "2023-01-01", "vast": 0.14499 },
+      { "vanaf": "2023-01-29", "vast": 0.14494 },
+      { "vanaf": "2023-02-13", "vast": 0.15149 },
+      { "vanaf": "2024-01-01", "vast": 0.13431 },
+      { "vanaf": "2024-01-09", "vast": 0.13099 },
+      { "vanaf": "2025-01-02", "vast": 0.11954 },
+      { "vanaf": "2026-01-01", "vast": 0.10961 }
+    ],
+    "Eneco": [
+      { "vanaf": "2023-09-10", "vast": 0.14444 },
+      { "vanaf": "2024-01-01", "vast": 0.12725 },
+      { "vanaf": "2024-01-09", "vast": 0.12999 },
+      { "vanaf": "2024-03-30", "vast": 0.12765 },
+      { "vanaf": "2024-05-05", "vast": 0.12582 },
+      { "vanaf": "2024-10-19", "vast": 0.12813 },
+      { "vanaf": "2025-01-02", "vast": 0.12273 },
+      { "vanaf": "2025-10-06", "vast": 0.12019 },
+      { "vanaf": "2026-01-04", "vast": 0.10689 },
+      { "vanaf": "2026-05-02", "vast": 0.11155 }
+    ],
+    "Energie VanOns": [
+      { "vanaf": "2023-01-29", "vast": 0.14349 },
+      { "vanaf": "2024-01-01", "vast": 0.12631 },
+      { "vanaf": "2024-01-09", "vast": 0.1488 },
+      { "vanaf": "2025-01-02", "vast": 0.12954 },
+      { "vanaf": "2025-10-06", "vast": 0.12551 },
+      { "vanaf": "2026-01-01", "vast": 0.11558 },
+      { "vanaf": "2026-05-06", "vast": 0.11142 }
+    ],
+    "Energiedirect": [
+      { "vanaf": "2026-01-03", "vast": 0.10855 }
+    ],
+    "Energiek": [
+      { "vanaf": "2026-01-03", "vast": 0.10649 }
+    ],
+    "EnergyZero": [
+      { "vanaf": "2022-10-23", "vast": 0.06338 },
+      { "vanaf": "2023-01-14", "vast": 0.14354 },
+      { "vanaf": "2023-04-25", "vast": 0.14349 },
+      { "vanaf": "2024-01-01", "vast": 0.12631 },
+      { "vanaf": "2024-01-09", "vast": 0.15012 },
+      { "vanaf": "2025-01-02", "vast": 0.12954 },
+      { "vanaf": "2026-01-01", "vast": 0.11961 },
+      { "vanaf": "2026-05-06", "vast": 0.11014 }
+    ],
+    "Essent": [
+      { "vanaf": "2026-01-03", "vast": 0.1125 }
+    ],
+    "Frank Energie": [
+      { "vanaf": "2022-10-23", "vast": 0.07048 },
+      { "vanaf": "2023-01-01", "vast": 0.14694 },
+      { "vanaf": "2023-01-16", "vast": 0.14702 },
+      { "vanaf": "2023-02-02", "vast": 0.14698 },
+      { "vanaf": "2024-01-01", "vast": 0.12979 },
+      { "vanaf": "2024-10-21", "vast": 0.12384 },
+      { "vanaf": "2025-01-02", "vast": 0.11658 },
+      { "vanaf": "2026-01-01", "vast": 0.10665 }
+    ],
+    "Groenestroom Lokaal": [
+      { "vanaf": "2022-10-23", "vast": 0.0638 },
+      { "vanaf": "2023-01-01", "vast": 0.14354 },
+      { "vanaf": "2023-01-29", "vast": 0.14349 },
+      { "vanaf": "2024-01-01", "vast": 0.12631 },
+      { "vanaf": "2024-01-09", "vast": 0.1488 },
+      { "vanaf": "2025-01-02", "vast": 0.12954 },
+      { "vanaf": "2025-03-20", "vast": 0.14154 },
+      { "vanaf": "2025-10-06", "vast": 0.12954 },
+      { "vanaf": "2026-01-01", "vast": 0.11961 }
+    ],
+    "Hegg Energie": [
+      { "vanaf": "2026-01-03", "vast": 0.11961 },
+      { "vanaf": "2026-05-06", "vast": 0.11014, "bron": "support.hegg.energy 'Onze tarieven bij dynamische energie': EUR 0,02242/kWh incl. btw (Alleen stroom). Ongewijzigd, gecontroleerd 2026-11-06" }
+    ],
+    "Innova Energie": [
+      { "vanaf": "2026-01-03", "vast": 0.11234 },
+      { "vanaf": "2026-05-06", "vast": 0.10188 }
+    ],
+    "Mijndomein Energie": [
+      { "vanaf": "2022-10-23", "vast": 0.0638 },
+      { "vanaf": "2023-01-01", "vast": 0.14354 },
+      { "vanaf": "2023-01-29", "vast": 0.14349 },
+      { "vanaf": "2024-01-01", "vast": 0.12631 },
+      { "vanaf": "2024-01-09", "vast": 0.1488 },
+      { "vanaf": "2025-01-02", "vast": 0.12954 },
+      { "vanaf": "2025-08-16", "vast": 0.14154 },
+      { "vanaf": "2026-01-04", "vast": 0.11961 },
+      { "vanaf": "2026-05-06", "vast": 0.13161 }
+    ],
+    "NextEnergy": [
+      { "vanaf": "2022-10-23", "vast": 0.06809 },
+      { "vanaf": "2023-01-01", "vast": 0.14429 },
+      { "vanaf": "2023-01-29", "vast": 0.14425 },
+      { "vanaf": "2024-01-01", "vast": 0.12706 },
+      { "vanaf": "2024-01-09", "vast": 0.12698 },
+      { "vanaf": "2024-04-11", "vast": 0.12525 },
+      { "vanaf": "2025-01-02", "vast": 0.11964 },
+      { "vanaf": "2026-01-01", "vast": 0.10971 }
+    ],
+    "Pure Energie": [
+      { "vanaf": "2025-05-19", "vast": 0.12273 },
+      { "vanaf": "2025-10-01", "vast": 0.1222 },
+      { "vanaf": "2025-10-06", "vast": 0.11798 },
+      { "vanaf": "2026-01-04", "vast": 0.10813 },
+      { "vanaf": "2026-05-06", "vast": 0.10565 }
+    ],
+    "Quatt": [
+      { "vanaf": "2026-01-03", "vast": 0.10661 }
+    ],
+    "SamSam": [
+      { "vanaf": "2026-01-03", "vast": 0.11961 },
+      { "vanaf": "2026-05-06", "vast": 0.11014 }
+    ],
+    "Tibber": [
+      { "vanaf": "2022-10-23", "vast": 0.05345 },
+      { "vanaf": "2023-01-01", "vast": 0.12803 },
+      { "vanaf": "2023-01-29", "vast": 0.12799 },
+      { "vanaf": "2023-03-02", "vast": 0.14087 },
+      { "vanaf": "2023-03-22", "vast": 0.14399 },
+      { "vanaf": "2024-01-01", "vast": 0.1268 },
+      { "vanaf": "2025-01-02", "vast": 0.11848 },
+      { "vanaf": "2025-01-27", "vast": 0.12204 },
+      { "vanaf": "2026-01-01", "vast": 0.11211 },
+      { "vanaf": "2026-05-06", "vast": 0.11286 },
+      { "vanaf": "2026-09-01", "vast": 0.10649, "bron": "tibber.com/nl/energiecontract: inkoopvergoeding EUR 0,0180/kWh incl. btw per 1-9-2026 (gecontroleerd 2026-11-06)" }
+    ],
+    "Vandebron": [
+      { "vanaf": "2023-04-03", "vast": 0.14407 },
+      { "vanaf": "2024-01-01", "vast": 0.12688 },
+      { "vanaf": "2025-01-02", "vast": 0.11962 },
+      { "vanaf": "2025-10-06", "vast": 0.12279 },
+      { "vanaf": "2026-01-01", "vast": 0.11286 }
+    ],
+    "Vattenfall": [
+      { "vanaf": "2026-01-03", "vast": 0.11268 }
+    ],
+    "Zon op Naam": [
+      { "vanaf": "2023-01-02", "vast": 0.15203 },
+      { "vanaf": "2023-01-29", "vast": 0.15199 },
+      { "vanaf": "2023-03-28", "vast": 0.14249 },
+      { "vanaf": "2024-01-01", "vast": 0.1253 },
+      { "vanaf": "2024-01-09", "vast": 0.12533 },
+      { "vanaf": "2025-01-02", "vast": 0.11804 },
+      { "vanaf": "2026-01-04", "vast": 0.10607 },
+      { "vanaf": "2026-05-06", "vast": 0.10814 }
+    ],
+    "ZonderGas": [
+      { "vanaf": "2022-10-23", "vast": 0.0638 },
+      { "vanaf": "2023-01-01", "vast": 0.14354 },
+      { "vanaf": "2023-01-29", "vast": 0.14349 },
+      { "vanaf": "2024-01-01", "vast": 0.12631 },
+      { "vanaf": "2024-01-09", "vast": 0.1488 },
+      { "vanaf": "2025-01-02", "vast": 0.12954 },
+      { "vanaf": "2025-08-16", "vast": 0.14154 },
+      { "vanaf": "2026-01-01", "vast": 0.13161 },
+      { "vanaf": "2026-05-06", "vast": 0.09161 }
+    ],
+    "Zonneplan": [
+      { "vanaf": "2022-10-23", "vast": 0.05388 },
+      { "vanaf": "2023-01-01", "vast": 0.12851 },
+      { "vanaf": "2023-01-29", "vast": 0.12847 },
+      { "vanaf": "2023-07-02", "vast": 0.14252 },
+      { "vanaf": "2024-01-01", "vast": 0.12533 },
+      { "vanaf": "2025-01-02", "vast": 0.11807 },
+      { "vanaf": "2026-01-01", "vast": 0.10814 }
+    ]
+  }
+}

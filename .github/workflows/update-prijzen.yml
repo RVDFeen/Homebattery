@@ -1,0 +1,51 @@
+name: Energieprijzen bijwerken
+
+on:
+  schedule:
+    # Day-ahead prijzen voor morgen verschijnen rond 13:00 NL-tijd.
+    - cron: '30 13 * * *'
+    - cron: '30 18 * * *'   # reserve-run als de API 's middags laat was
+  workflow_dispatch: {}      # handmatig starten via tabblad "Actions"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-prijzen
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prijzen ophalen en CSV's aanvullen
+        id: update
+        continue-on-error: true   # ook bij een waarschuwing (bv. ontbrekende energiebelasting) eerst committen
+        run: node scripts/update-prijzen.mjs
+
+      - name: Prijsdata controleren (formaat, geen gaten, actueel)
+        run: node tests/run-tests.mjs --filter=prijsdata
+
+      - name: Committen als er iets veranderd is
+        run: |
+          if git diff --quiet; then
+            echo "Geen nieuwe prijzen."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/epex.csv
+          git commit -m "Energieprijzen automatisch bijgewerkt ($(date -u +%Y-%m-%d))"
+          git push
+
+      - name: Melden als het script een probleem had
+        if: steps.update.outcome == 'failure'
+        run: |
+          echo "Het update-script gaf een fout — zie de stap 'Prijzen ophalen' hierboven."
+          exit 1
