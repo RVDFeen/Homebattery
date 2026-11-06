@@ -30,6 +30,8 @@ let huidigeGroep = '';
 const groep = naam => { huidigeGroep = naam; };
 const tests = [];
 function test(naam, fn) { tests.push({ groep: huidigeGroep, naam, fn }); }
+// Test die iets inleest waar latere tests op leunen: draait altijd (stil) mee, ook als --filter hem overslaat.
+function voorbereiding(naam, fn) { tests.push({ groep: huidigeGroep, naam, fn, voorbereiding: true }); }
 
 class Fout extends Error {}
 const ok = (v, msg) => { if (!v) throw new Fout(msg || 'verwacht: waar'); };
@@ -198,7 +200,7 @@ test('negatieve prijzen komen voor (anders is er iets mis met de bron)', () => o
 groep('2. Leveranciers (data/leveranciers.json)');
 // ==================================================================================
 let CFG;
-test('is geldige JSON met btw, energiebelasting en leveranciers', () => {
+voorbereiding('is geldige JSON met btw, energiebelasting en leveranciers', () => {
   CFG = JSON.parse(lees('data/leveranciers.json'));
   near(CFG.btw, 0.21, 0.05, 'btw');
   ok(CFG.energiebelasting && typeof CFG.energiebelasting === 'object', 'energiebelasting ontbreekt');
@@ -249,7 +251,7 @@ test('laatstGecontroleerd is niet ouder dan 9 maanden', () => {
 groep('2b. Thuisbatterijen (data/batterijen.json)');
 // ==================================================================================
 let BAT;
-test('is geldige JSON met een lijst batterijen', () => {
+voorbereiding('is geldige JSON met een lijst batterijen', () => {
   BAT = JSON.parse(lees('data/batterijen.json')).batterijen;
   ok(Array.isArray(BAT) && BAT.length >= 10, 'te weinig batterijen');
 });
@@ -360,7 +362,7 @@ test('vastOp: periode, terug in de tijd en nieuw jaar corrigeren voor energiebel
 groep('4. Rekenkern');
 // ==================================================================================
 let K; // rekenfuncties van de app
-test('app-script laadt zonder fouten', async () => { K = (await laadApp()).T; ok(K && K.simulate); });
+voorbereiding('app-script laadt zonder fouten', async () => { K = (await laadApp()).T; ok(K && K.simulate); });
 
 test('parseCSV: Windows-regeleinden, lege regels en te korte regels', () => {
   const r = K.parseCSV('a,b\r\n1,2\r\n\r\n3\r\n4,5\r\n');
@@ -1100,7 +1102,10 @@ const kleur = (c, s) => process.stdout.isTTY ? `\x1b[${c}m${s}\x1b[0m` : s;
 let vorigeGroep = '', geslaagd = 0, mislukt = 0;
 const start = Date.now();
 for (const t of tests) {
-  if (FILTER && !(t.groep + ' ' + t.naam).toLowerCase().includes(FILTER)) continue;
+  if (FILTER && !(t.groep + ' ' + t.naam).toLowerCase().includes(FILTER)) {
+    if (t.voorbereiding) { try { await t.fn(); } catch (e) { /* de eigen test meldt dit bij een volledige run */ } }
+    continue;
+  }
   if (t.groep !== vorigeGroep) { console.log('\n' + kleur('1', t.groep)); vorigeGroep = t.groep; }
   const t0 = Date.now();
   try {
